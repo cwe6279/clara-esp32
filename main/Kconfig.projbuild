@@ -983,7 +983,7 @@ config CLARA_FACE_SUBTITLES
 
 config CLARA_LISTEN_SETTLE_MS
     int "Clara face: ms after the mic opens before the eyes open at start-up"
-    default 10000
+    default 15000
     help
         The speech-command detector misses words said in its first seconds after the mic
         opens (boot logs put the first catch 3 to 5 s after it); the eyes stay shut until
