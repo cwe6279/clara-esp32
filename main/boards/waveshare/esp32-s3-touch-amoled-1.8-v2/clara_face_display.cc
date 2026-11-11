@@ -214,6 +214,8 @@ void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
         ESP_LOGI(TAG, "touch %s at %d,%d", code == LV_EVENT_PRESSED ? "down" : "up", x, y);
     }
     if (sleeping_ || panel_asleep_) {                  // tap to wake; that press does nothing else
+                                                       // (on battery the panel sleeps for real and
+                                                       // the touch goes with it: the wake word wakes her)
         if (code == LV_EVENT_PRESSED) {
             swallow_press_ = true;
             if (sleeping_) WakeFromSleep("tapped");
@@ -323,8 +325,11 @@ void ClaraFaceDisplay::SetPowerSaveMode(bool on) {
     }
 }
 
-// A long hold: she closes her eyes and the panel sleeps; the ears stay on. A tap, the
-// wake word, or USB wakes her. LVGL task only.
+// A long hold: she closes her eyes and the screen goes black; the ears stay on. A tap,
+// the wake word, or USB wakes her. The panel itself stays awake: with it in SLPIN the
+// touch controller reports nothing, so a tap could never wake her (an AMOLED showing
+// black draws next to nothing anyway; the battery timer still does the deep sleep).
+// LVGL task only.
 void ClaraFaceDisplay::GoToSleep() {
     if (sleeping_) return;
     sleeping_ = true;
@@ -337,7 +342,7 @@ void ClaraFaceDisplay::GoToSleep() {
 void ClaraFaceDisplay::WakeFromSleep(const char* why) {
     if (!sleeping_) return;
     sleeping_ = false;
-    PanelSleep(false);
+    if (status_bar_) lv_obj_remove_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
     blink_step_ = 5;                                   // lids open
     ESP_LOGI(TAG, "awake: %s", why);
 }
@@ -379,7 +384,7 @@ void ClaraFaceDisplay::Tick() {
             if (lid > kLidLevels - 1) lid = kLidLevels - 1;
             ApplyMouth(0);
             for (auto& eye : eyes_) { ApplyGaze(eye, 0, 0); ApplyLid(eye, lid); }
-            if (lid == kLidLevels - 1 && now - sleep_at_us_ > 900 * 1000) PanelSleep(true);
+            if (lid == kLidLevels - 1 && status_bar_) lv_obj_add_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
             return;
         }
     }
