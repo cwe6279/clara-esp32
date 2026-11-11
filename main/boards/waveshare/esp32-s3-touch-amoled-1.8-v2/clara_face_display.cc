@@ -14,43 +14,45 @@
 
 #define TAG "ClaraFace"
 
+#include "clara_face_layout.h"             // generated: talker tools/satellite_face_art.py
+
 extern "C" {
-extern const lv_image_dsc_t clara_mouth_sil, clara_mouth_pp, clara_mouth_ee,
-                            clara_mouth_ah, clara_mouth_aa, clara_mouth_oo;
-extern const lv_image_dsc_t clara_left_sclera, clara_left_iris,
-                            clara_left_lid0, clara_left_lid1, clara_left_lid2, clara_left_lid3, clara_left_lid4;
-extern const lv_image_dsc_t clara_right_sclera, clara_right_iris,
-                            clara_right_lid0, clara_right_lid1, clara_right_lid2, clara_right_lid3, clara_right_lid4;
-extern const lv_image_dsc_t clara_left_emo_happy, clara_left_emo_angry, clara_left_emo_annoyed, clara_left_emo_sad;
-extern const lv_image_dsc_t clara_right_emo_happy, clara_right_emo_angry, clara_right_emo_annoyed, clara_right_emo_sad;
+extern const lv_image_dsc_t FACE_SYM(mouth_sil), FACE_SYM(mouth_pp), FACE_SYM(mouth_ee),
+                            FACE_SYM(mouth_ah), FACE_SYM(mouth_aa), FACE_SYM(mouth_oo);
+extern const lv_image_dsc_t FACE_SYM(left_sclera), FACE_SYM(left_iris),
+                            FACE_SYM(left_lid0), FACE_SYM(left_lid1), FACE_SYM(left_lid2), FACE_SYM(left_lid3), FACE_SYM(left_lid4);
+extern const lv_image_dsc_t FACE_SYM(right_sclera), FACE_SYM(right_iris),
+                            FACE_SYM(right_lid0), FACE_SYM(right_lid1), FACE_SYM(right_lid2), FACE_SYM(right_lid3), FACE_SYM(right_lid4);
+extern const lv_image_dsc_t FACE_SYM(left_emo_happy), FACE_SYM(left_emo_angry), FACE_SYM(left_emo_annoyed), FACE_SYM(left_emo_sad);
+extern const lv_image_dsc_t FACE_SYM(right_emo_happy), FACE_SYM(right_emo_angry), FACE_SYM(right_emo_annoyed), FACE_SYM(right_emo_sad);
 }
 
 // Lid cuts per emotion, the same shapes as EMOTION_LIDS in the Python face.
 // Index 0 is "no cut" (neutral, surprised); the server's names map in SetEmotion.
-static const lv_image_dsc_t* kLeftEmos[] = {nullptr, &clara_left_emo_happy, &clara_left_emo_angry,
-                                            &clara_left_emo_annoyed, &clara_left_emo_sad};
-static const lv_image_dsc_t* kRightEmos[] = {nullptr, &clara_right_emo_happy, &clara_right_emo_angry,
-                                             &clara_right_emo_annoyed, &clara_right_emo_sad};
+static const lv_image_dsc_t* kLeftEmos[] = {nullptr, &FACE_SYM(left_emo_happy), &FACE_SYM(left_emo_angry),
+                                            &FACE_SYM(left_emo_annoyed), &FACE_SYM(left_emo_sad)};
+static const lv_image_dsc_t* kRightEmos[] = {nullptr, &FACE_SYM(right_emo_happy), &FACE_SYM(right_emo_angry),
+                                             &FACE_SYM(right_emo_annoyed), &FACE_SYM(right_emo_sad)};
 static const int kEmoCount = 5;
 
 // Viseme ids on the wire (talker/satellite.py): 0 sil, 1 pp, 2 ee, 3 ah, 4 aa, 5 oo.
-static const lv_image_dsc_t* kMouths[] = {&clara_mouth_sil, &clara_mouth_pp, &clara_mouth_ee,
-                                          &clara_mouth_ah,  &clara_mouth_aa, &clara_mouth_oo};
+static const lv_image_dsc_t* kMouths[] = {&FACE_SYM(mouth_sil), &FACE_SYM(mouth_pp), &FACE_SYM(mouth_ee),
+                                          &FACE_SYM(mouth_ah),  &FACE_SYM(mouth_aa), &FACE_SYM(mouth_oo)};
 static const int kMouthCount = sizeof(kMouths) / sizeof(kMouths[0]);
 struct Place { int x, y; };
-// faces/clara/face.json scaled 0.6 onto the 368x448 panel (docs/SATELLITE_ESP32.md)
-static const Place kMouthPos[] = {{141, 289}, {146, 290}, {129, 285}, {133, 277}, {129, 270}, {144, 278}};
+// positions from the generated layout header (face.json scaled onto the panel)
+static const Place kMouthPos[] = FACE_MOUTH_POS;
 
-static const lv_image_dsc_t* kLeftLids[] = {&clara_left_lid0, &clara_left_lid1, &clara_left_lid2,
-                                            &clara_left_lid3, &clara_left_lid4};
-static const lv_image_dsc_t* kRightLids[] = {&clara_right_lid0, &clara_right_lid1, &clara_right_lid2,
-                                             &clara_right_lid3, &clara_right_lid4};
+static const lv_image_dsc_t* kLeftLids[] = {&FACE_SYM(left_lid0), &FACE_SYM(left_lid1), &FACE_SYM(left_lid2),
+                                            &FACE_SYM(left_lid3), &FACE_SYM(left_lid4)};
+static const lv_image_dsc_t* kRightLids[] = {&FACE_SYM(right_lid0), &FACE_SYM(right_lid1), &FACE_SYM(right_lid2),
+                                             &FACE_SYM(right_lid3), &FACE_SYM(right_lid4)};
 static const int kLidLevels = 5;
-static const int kEyeSize = 114;                      // textured_eye size 190 * 0.6
-static const int kIrisRest = 23;                      // iris image offset inside the eye box
-static const int kMaxShift = 51;                      // 0.45 of the eye size, as on the host
-static const float kGazeRadius = 0.35f;               // face.json gaze_radius
-static const Place kEyeCentre[2] = {{87, 188}, {281, 188}};
+static const int kEyeSize = FACE_EYE_SIZE;
+static const int kIrisRest = FACE_IRIS_REST;         // iris image offset inside the eye box
+static const int kMaxShift = FACE_MAX_SHIFT;         // 0.45 of the eye size, as on the host
+static const float kGazeRadius = FACE_GAZE_RADIUS;   // face.json gaze_radius
+static const Place kEyeCentre[2] = {{FACE_EYE_L_CX, FACE_EYE_L_CY}, {FACE_EYE_R_CX, FACE_EYE_R_CY}};
 static const int kBlinkSteps[] = {1, 2, 3, 4, 3, 2, 1, 0};
 static const int kTickMs = 20;
 static const int kListenSettleMs = CONFIG_CLARA_LISTEN_SETTLE_MS;   // mic open to eyes open
@@ -119,8 +121,8 @@ void ClaraFaceDisplay::SetupUI() {
 
     eyes_[0].cx = kEyeCentre[0].x; eyes_[0].cy = kEyeCentre[0].y;
     eyes_[1].cx = kEyeCentre[1].x; eyes_[1].cy = kEyeCentre[1].y;
-    BuildEye(eyes_[0], screen, &clara_left_sclera, &clara_left_iris, kLeftLids, kLeftEmos);
-    BuildEye(eyes_[1], screen, &clara_right_sclera, &clara_right_iris, kRightLids, kRightEmos);
+    BuildEye(eyes_[0], screen, &FACE_SYM(left_sclera), &FACE_SYM(left_iris), kLeftLids, kLeftEmos);
+    BuildEye(eyes_[1], screen, &FACE_SYM(right_sclera), &FACE_SYM(right_iris), kRightLids, kRightEmos);
     PlaceEyes();
 
     mouth_ = lv_image_create(screen);

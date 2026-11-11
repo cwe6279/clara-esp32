@@ -1,13 +1,12 @@
 
 #if defined(LV_LVGL_H_INCLUDE_SIMPLE)
 #include "lvgl.h"
-#elif defined(LV_LVGL_H_INCLUDE_SYSTEM)
-#include <lvgl.h>
 #elif defined(LV_BUILD_TEST)
 #include "../lvgl.h"
 #else
 #include "lvgl/lvgl.h"
 #endif
+
 
 #ifndef LV_ATTRIBUTE_MEM_ALIGN
 #define LV_ATTRIBUTE_MEM_ALIGN
@@ -196,17 +195,13 @@ uint8_t clara_right_sclera_map[] = {
 };
 
 const lv_image_dsc_t clara_right_sclera = {
-  .header = {
-    .magic = LV_IMAGE_HEADER_MAGIC,
-    .cf = LV_COLOR_FORMAT_RGB565A8,
-    .flags = 0,
-    .w = 114,
-    .h = 114,
-    .stride = 228,
-    .reserved_2 = 0,
-  },
+  .header.magic = LV_IMAGE_HEADER_MAGIC,
+  .header.cf = LV_COLOR_FORMAT_RGB565A8,
+  .header.flags = 0,
+  .header.w = 114,
+  .header.h = 114,
+  .header.stride = 228,
   .data_size = sizeof(clara_right_sclera_map),
   .data = clara_right_sclera_map,
-  .reserved = NULL,
 };
 
