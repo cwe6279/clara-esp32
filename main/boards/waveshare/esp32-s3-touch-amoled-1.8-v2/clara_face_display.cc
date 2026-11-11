@@ -346,6 +346,8 @@ void ClaraFaceDisplay::WakeFromSleep(const char* why) {
     if (!sleeping_) return;
     sleeping_ = false;
     if (status_bar_) lv_obj_remove_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+    if (mouth_) lv_obj_remove_flag(mouth_, LV_OBJ_FLAG_HIDDEN);
+    if (subtitle_) lv_obj_remove_flag(subtitle_, LV_OBJ_FLAG_HIDDEN);
     blink_step_ = 5;                                   // lids open
     ESP_LOGI(TAG, "awake: %s", why);
 }
@@ -399,7 +401,11 @@ void ClaraFaceDisplay::Tick() {
             if (lid > kLidLevels - 1) lid = kLidLevels - 1;
             ApplyMouth(0);
             for (auto& eye : eyes_) { ApplyGaze(eye, 0, 0); ApplyLid(eye, lid); }
-            if (lid == kLidLevels - 1 && status_bar_) lv_obj_add_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+            if (lid == kLidLevels - 1) {                // eyes shut: nothing else on the screen
+                if (status_bar_) lv_obj_add_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+                if (mouth_) lv_obj_add_flag(mouth_, LV_OBJ_FLAG_HIDDEN);
+                if (subtitle_) lv_obj_add_flag(subtitle_, LV_OBJ_FLAG_HIDDEN);
+            }
             return;
         }
     }
