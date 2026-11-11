@@ -75,4 +75,5 @@ private:
     // Eyes closed from power-on until the wake word is listening; then they open once.
     bool ready_ = false;
     int64_t listening_since_us_ = 0;
+    bool drowsy_ = false;                      // lids parted, not yet open
 };

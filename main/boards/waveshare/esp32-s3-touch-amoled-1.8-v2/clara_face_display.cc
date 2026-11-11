@@ -219,9 +219,12 @@ bool ClaraFaceDisplay::BecameReady() {
     // until it is worth saying her name.
     int64_t now = esp_timer_get_time();
     if (listening_since_us_ == 0) listening_since_us_ = now;
-    if (now - listening_since_us_ < kListenSettleMs * 1000) return false;
+    int64_t waited = now - listening_since_us_;
+    // sleepy waking: the lids part two thirds of the way in, and open fully at the end
+    drowsy_ = waited >= kListenSettleMs * 1000 * 2 / 3;
+    if (waited < kListenSettleMs * 1000) return false;
     ready_ = true;
-    blink_step_ = 4;                           // the second half of a blink: lids 3, 2, 1, 0
+    blink_step_ = 5;                           // the rest of a blink: lids 2, 1, 0
     ESP_LOGI(TAG, "Listening: eyes open");
     return true;
 }
@@ -233,7 +236,7 @@ void ClaraFaceDisplay::Tick() {
         ApplyMouth(0);
         for (auto& eye : eyes_) {
             ApplyGaze(eye, 0, 0);
-            ApplyLid(eye, kLidLevels - 1);     // shut
+            ApplyLid(eye, drowsy_ ? kLidLevels - 2 : kLidLevels - 1);   // a slit, or shut
         }
         return;
     }
