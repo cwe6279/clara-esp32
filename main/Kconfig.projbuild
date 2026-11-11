@@ -985,7 +985,7 @@ config CLARA_SLEEP_SECONDS
     int "Clara face: seconds idle on battery before the screen goes dark"
     default 60
     help
-        Only while discharging. The face stops and the panel is switched off; the wake word
+        Only while discharging. The face stops and the panel is put to sleep; the wake word
         keeps listening, and the wake word brings the face back.
 
 config CLARA_SHUTDOWN_SECONDS

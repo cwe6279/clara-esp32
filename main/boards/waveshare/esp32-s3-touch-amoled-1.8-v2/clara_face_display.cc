@@ -1,4 +1,5 @@
 #include "clara_face_display.h"
+#include "application.h"
 #include "esp_lcd_panel_ops.h"
 #include "lvgl_theme.h"
 
@@ -178,19 +179,53 @@ void ClaraFaceDisplay::ApplyGaze(Eye& eye, int dx, int dy) {
 }
 
 void ClaraFaceDisplay::SetPowerSaveMode(bool on) {
-    // Idle on battery: the face stops and the panel goes dark (DISPOFF), while the
-    // wake word keeps running; the power-save timer shuts the board down later.
+    // Idle on battery: the face stops and the panel is put to sleep (DISPOFF, then SLPIN,
+    // which stops the driver's oscillator and charge pumps), while the wake word keeps
+    // running; the power-save timer shuts the board down later. Waking is SLPOUT, the
+    // driver's 120 ms settle, a full redraw, DISPON. The panel has no reset line, so the
+    // driver's deep standby (a 1.3 s re-init on wake) never comes into it.
     DisplayLockGuard lock(this);
-    if (face_timer_) {
-        if (on) lv_timer_pause(face_timer_); else lv_timer_resume(face_timer_);
+    if (on) {
+        if (face_timer_) lv_timer_pause(face_timer_);
+        if (panel_) {
+            esp_lcd_panel_disp_on_off(panel_, false);
+            esp_lcd_panel_disp_sleep(panel_, true);
+        }
+    } else {
+        if (panel_) {
+            esp_lcd_panel_disp_sleep(panel_, false);
+            lv_obj_invalidate(lv_screen_active());
+            lv_refr_now(lv_display_get_default());
+            esp_lcd_panel_disp_on_off(panel_, true);
+        }
+        if (face_timer_) lv_timer_resume(face_timer_);
     }
-    if (panel_) {
-        esp_lcd_panel_disp_on_off(panel_, !on);
+}
+
+// Before the wake word runs (Wi-Fi, the version check, loading the model) she is not
+// listening, so the eyes stay shut; a face with open eyes means "say Clara".
+bool ClaraFaceDisplay::BecameReady() {
+    auto& app = Application::GetInstance();
+    if (app.GetDeviceState() != kDeviceStateIdle || !app.GetAudioService().IsWakeWordRunning()) {
+        return false;
     }
+    ready_ = true;
+    blink_step_ = 4;                           // the second half of a blink: lids 3, 2, 1, 0
+    ESP_LOGI(TAG, "Listening: eyes open");
+    return true;
 }
 
 void ClaraFaceDisplay::Tick() {
     int64_t now = esp_timer_get_time();
+
+    if (!ready_ && !BecameReady()) {
+        ApplyMouth(0);
+        for (auto& eye : eyes_) {
+            ApplyGaze(eye, 0, 0);
+            ApplyLid(eye, kLidLevels - 1);     // shut
+        }
+        return;
+    }
 
     // mouth: which 20 ms slot of the frame now playing
     int64_t at = frame_at_us_.load();

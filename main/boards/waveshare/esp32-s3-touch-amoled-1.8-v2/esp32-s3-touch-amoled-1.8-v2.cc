@@ -157,6 +157,7 @@ private:
     CustomBacklight* backlight_;
     esp_io_expander_handle_t io_expander = NULL;
     PowerSaveTimer* power_save_timer_;
+    int last_discharging_ = -1;           // what the timer was last told; -1 before the first poll
     TaskHandle_t power_button_task_handle_ = nullptr;
     bool returning_to_brookesia_ = false;
 
@@ -202,20 +203,30 @@ private:
         esp_restart();
     }
 
+    // Idle on battery: the panel sleeps after CONFIG_CLARA_SLEEP_SECONDS while the wake word
+    // keeps running, and the board powers off after CONFIG_CLARA_SHUTDOWN_SECONDS. The timer is
+    // not armed here: GetBatteryLevel() arms it when the charger reports discharging and
+    // disarms it on USB, and the status bar polls that every second from boot. (Arming it at
+    // boot meant a board on USB switched itself off four minutes after its last reply.)
     void InitializePowerSaveTimer() {
         power_save_timer_ = new PowerSaveTimer(-1, CONFIG_CLARA_SLEEP_SECONDS, CONFIG_CLARA_SHUTDOWN_SECONDS);
         power_save_timer_->OnEnterSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(true);
-            GetBacklight()->SetBrightness(20);
         });
         power_save_timer_->OnExitSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(false);
             GetBacklight()->RestoreBrightness();
         });
         power_save_timer_->OnShutdownRequest([this]() {
+            int level = 0, mv = 0;
+            bool charging = false, discharging = false;
+            GetBatteryLevel(level, charging, discharging);
+            pmic_->GetBatteryVoltage(mv);
+            ESP_LOGI(TAG, "Idle on battery for %d s: powering off at %d%% (%d mV)",
+                     CONFIG_CLARA_SHUTDOWN_SECONDS, level, mv);
+            vTaskDelay(pdMS_TO_TICKS(50));
             pmic_->PowerOff();
         });
-        power_save_timer_->SetEnabled(true);
     }
 
     void InitializeCodecI2c() {
@@ -405,16 +416,21 @@ public:
     }
 
     virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging) override {
-        static bool last_discharging = false;
         charging = pmic_->IsCharging();
         discharging = pmic_->IsDischarging();
-        if (discharging != last_discharging) {
+        if ((int)discharging != last_discharging_) {   // first poll included: -1 matches neither
+            ESP_LOGI(TAG, "Power: %s, idle timer %s", discharging ? "on battery" : "on USB",
+                     discharging ? "armed" : "off");
             power_save_timer_->SetEnabled(discharging);
-            last_discharging = discharging;
+            last_discharging_ = discharging;
         }
 
         level = pmic_->GetBatteryLevel();
         return true;
+    }
+
+    virtual bool GetBatteryVoltage(int& millivolts) override {
+        return pmic_->GetBatteryVoltage(millivolts);
     }
 
     virtual void SetPowerSaveLevel(PowerSaveLevel level) override {

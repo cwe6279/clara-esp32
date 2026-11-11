@@ -44,6 +44,8 @@ std::string Board::GenerateUuid() {
 
 bool Board::GetBatteryLevel(int& level, bool& charging, bool& discharging) { return false; }
 
+bool Board::GetBatteryVoltage(int& millivolts) { return false; }
+
 bool Board::GetTemperature(float& esp32temp) { return false; }
 
 Display* Board::GetDisplay() {

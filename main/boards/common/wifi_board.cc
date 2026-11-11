@@ -326,6 +326,10 @@ std::string WifiBoard::GetDeviceStatusJson() {
         auto battery = cJSON_CreateObject();
         cJSON_AddNumberToObject(battery, "level", level);
         cJSON_AddBoolToObject(battery, "charging", charging);
+        int millivolts = 0;
+        if (GetBatteryVoltage(millivolts)) {
+            cJSON_AddNumberToObject(battery, "voltage", millivolts / 1000.0);
+        }
         cJSON_AddItemToObject(root, "battery", battery);
     }
 

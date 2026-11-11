@@ -21,7 +21,7 @@ public:
     void ClearChatMessages() override;
     void SetTheme(Theme* theme) override;       // the text font arrives with the theme
     void SetFaceFrame(uint32_t packed) override;      // audio task: records, never draws
-    void SetPowerSaveMode(bool on) override;          // battery idle: panel dark, ears stay on
+    void SetPowerSaveMode(bool on) override;          // battery idle: panel asleep, ears stay on
 
 private:
     struct Eye {
@@ -41,6 +41,7 @@ private:
 
     static void FaceTimer(lv_timer_t* timer);
     void Tick();
+    bool BecameReady();
     void BuildEye(Eye& eye, lv_obj_t* screen, const lv_image_dsc_t* sclera,
                   const lv_image_dsc_t* iris, const lv_image_dsc_t* const* lids,
                   const lv_image_dsc_t* const* emos);
@@ -70,4 +71,7 @@ private:
     std::atomic<int> emotion_dy_{0};
     int shown_emotion_dy_ = 0;
     std::atomic<int> emotion_{0};              // index into the lid-cut table
+
+    // Eyes closed from power-on until the wake word is listening; then they open once.
+    bool ready_ = false;
 };

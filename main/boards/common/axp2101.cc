@@ -13,10 +13,24 @@ Axp2101::Axp2101(i2c_master_bus_handle_t i2c_bus, uint8_t addr) : I2cDevice(i2c_
     // Read-modify-write rather than writing 0x30 outright: a board's own init may have
     // configured the other five channels deliberately, and this helper has no business
     // undoing that.
+    // Bit 0 is the battery voltage channel, read by GetBatteryVoltage(); same reasoning.
     uint8_t adc = ReadReg(0x30);
-    if ((adc & 0x10) == 0) {
-        WriteReg(0x30, adc | 0x10);
+    if ((adc & 0x11) != 0x11) {
+        WriteReg(0x30, adc | 0x11);
     }
+}
+
+bool Axp2101::GetBatteryVoltage(int& millivolts) {
+    // 14-bit VBAT ADC, 1 mV per count, high six bits in 0x34 then the low byte in 0x35
+    // (datasheet V1.0 section 6.13.2.33-34).
+    uint16_t high = ReadReg(0x34);
+    uint16_t low = ReadReg(0x35);
+    int raw = ((high & 0x3F) << 8) | low;
+    if (raw < 2000 || raw > 5000) {
+        return false;                         // channel off, no battery, or an I2C miss
+    }
+    millivolts = raw;
+    return true;
 }
 
 int Axp2101::GetBatteryCurrentDirection() {
