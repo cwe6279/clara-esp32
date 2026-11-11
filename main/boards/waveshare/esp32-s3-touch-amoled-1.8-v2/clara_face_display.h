@@ -90,5 +90,6 @@ private:
     int64_t look_until_us_ = 0;
     float look_x_ = 0, look_y_ = 0;
     int64_t laugh_until_us_ = 0;
+    int64_t boop_until_us_ = 0;
     bool drowsy_ = false;                      // lids parted, not yet open
 };

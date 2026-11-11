@@ -173,7 +173,8 @@ static const int kTickleTaps = 3;                      // taps within kTickleWin
 static const int kTickleWindowMs = 1500;
 static const int kTickleTravelPx = 120;                // a finger rubbed this far in one press
 static const int kHoldMs = 350;
-static const int kLaughMs = 1800;
+static const int kLaughMs = 2600;
+static const int kBoopMs = 700;                        // wide eyes after a tap
 static const int kLookMs = 1500;
 
 void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
@@ -186,25 +187,32 @@ void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
 void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
     if (!ready_) return;                               // asleep: not ticklish yet
     int64_t now = esp_timer_get_time();
+    if (code != LV_EVENT_PRESSING) {
+        ESP_LOGI(TAG, "touch %s at %d,%d", code == LV_EVENT_PRESSED ? "down" : "up", x, y);
+    }
     if (code == LV_EVENT_PRESSED) {
         press_start_us_ = now;
         travel_px_ = 0;
         last_touch_x_ = x; last_touch_y_ = y;
-        // a tap: she blinks and looks at your finger
-        if (blink_step_ < 0) blink_step_ = 0;
+        // a tap: eyes wide, then a look at your finger
+        boop_until_us_ = now + (int64_t)kBoopMs * 1000;
         look_until_us_ = now + (int64_t)kLookMs * 1000;
         // taps in a row
         int64_t window = now - (int64_t)kTickleWindowMs * 1000;
         int n = 0;
         for (int i = 0; i < kTapHistory; i++) if (tap_us_[i] > window) n++;
         tap_us_[tap_next_++ % kTapHistory] = now;
-        if (n + 1 >= kTickleTaps) laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+        if (n + 1 >= kTickleTaps) {
+            laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+            ESP_LOGI(TAG, "tickled: %d taps", n + 1);
+        }
     } else if (code == LV_EVENT_PRESSING) {
         travel_px_ += abs(x - last_touch_x_) + abs(y - last_touch_y_);
         last_touch_x_ = x; last_touch_y_ = y;
         look_until_us_ = now + (int64_t)kLookMs * 1000;
         held_ = now - press_start_us_ > (int64_t)kHoldMs * 1000;
         if (travel_px_ > kTickleTravelPx) {            // rubbed: that tickles
+            if (now >= laugh_until_us_) ESP_LOGI(TAG, "tickled: rubbed");
             laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
             travel_px_ = 0;
         }
@@ -344,19 +352,23 @@ void ClaraFaceDisplay::Tick() {
     } else if (now >= next_blink_us_) {
         blink_step_ = 0;
     }
+    bool boop = now < boop_until_us_;
+    int laugh_beat = (int)((now / 1000) / 350) % 2;     // a slow ha-ha
     if (laughing) {
-        lid = ((now / 1000) / 150) % 2 ? 2 : 0;        // eyes crinkle
-        if (!speaking) ApplyMouth(2);                   // a grin ("ee")
+        lid = laugh_beat ? 3 : 1;                       // eyes crinkle shut and open
+        if (!speaking) ApplyMouth(laugh_beat ? 3 : 2);  // "ah" / "ee"
     } else if (held_) {
-        lid = 2;                                        // squished: a squint
+        lid = 3;                                        // squished: a contented squint
+    } else if (boop) {
+        lid = 0;                                        // wide
     }
 
-    int edy = laughing ? -6 : emotion_dy_.load();
+    int edy = laughing ? (laugh_beat ? -2 : -8) : boop ? -12 : held_ ? -4 : emotion_dy_.load();
     if (edy != shown_emotion_dy_) {
         shown_emotion_dy_ = edy;
         PlaceEyes();
     }
-    int emo = laughing ? 1 : emotion_.load();
+    int emo = (laughing || held_) ? 1 : emotion_.load();    // the happy lid cut
     for (auto& eye : eyes_) {
         ApplyGaze(eye, dx, dy);
         ApplyLid(eye, lid);
