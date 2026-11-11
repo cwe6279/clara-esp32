@@ -8,6 +8,7 @@
 #include "led/single_led.h"
 #include "mcp_server.h"
 #include "config.h"
+#include "clara_face_display.h"
 #include "power_save_timer.h"
 #include "axp2101.h"
 #include "i2c_device.h"
@@ -152,7 +153,7 @@ private:
     i2c_master_bus_handle_t codec_i2c_bus_;
     Pmic* pmic_ = nullptr;
     Button boot_button_;
-    CustomLcdDisplay* display_;
+    LcdDisplay* display_;
     CustomBacklight* backlight_;
     esp_io_expander_handle_t io_expander = NULL;
     PowerSaveTimer* power_save_timer_;
@@ -202,7 +203,7 @@ private:
     }
 
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+        power_save_timer_ = new PowerSaveTimer(-1, CONFIG_CLARA_SLEEP_SECONDS, CONFIG_CLARA_SHUTDOWN_SECONDS);
         power_save_timer_->OnEnterSleepMode([this]() {
             GetDisplay()->SetPowerSaveMode(true);
             GetBacklight()->SetBrightness(20);
@@ -319,7 +320,7 @@ private:
         esp_lcd_panel_invert_color(panel, false);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
         esp_lcd_panel_disp_on_off(panel, true);
-        display_ = new CustomLcdDisplay(panel_io, panel,
+        display_ = new ClaraFaceDisplay(panel_io, panel,
                                         DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
         backlight_ = new CustomBacklight(panel_io);
         backlight_->RestoreBrightness();

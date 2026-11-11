@@ -973,6 +973,35 @@ config JC4827W543_EXTERNAL_AMP
         what a stock unit uses. Enable this only if you drive an external I2S
         amplifier from the expansion headers instead.
 
+config STARTUP_WAKE_WORD_HINT
+    bool "Announce the wake word at startup"
+    default y
+
+config CLARA_FACE_SUBTITLES
+    bool "Clara face: show what was heard and said as a subtitle line"
+    default n
+
+config CLARA_SLEEP_SECONDS
+    int "Clara face: seconds idle on battery before the screen goes dark"
+    default 60
+    help
+        Only while discharging. The face stops and the panel is switched off; the wake word
+        keeps listening, and the wake word brings the face back.
+
+config CLARA_SHUTDOWN_SECONDS
+    int "Clara face: seconds idle on battery before the board powers off"
+    default 240
+    help
+        Only while discharging; -1 never. Counted from the start of idle, so with the
+        defaults she listens in the dark for three minutes, then powers off (PWR wakes her).
+
+config WAKE_WORD_WHILE_SPEAKING
+    bool "Keep listening for the wake word while speaking (barge-in)"
+    default y
+    help
+        Upstream behaviour: the wake word interrupts playback. Off, a noise that sounds
+        like the wake word can no longer cut a reply short; the BOOT button still can.
+
 config USE_MULTILINE_CHAT_MESSAGE
     bool "Use multiline chat message display (default mode only)"
     depends on USE_DEFAULT_MESSAGE_STYLE

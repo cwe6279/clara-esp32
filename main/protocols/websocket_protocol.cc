@@ -108,7 +108,17 @@ bool WebsocketProtocol::OpenAudioChannel() {
     websocket_->OnData([this](const char* data, size_t len, bool binary) {
         if (binary) {
             if (on_incoming_audio_ != nullptr) {
-                if (version_ == 2) {
+                if (len > 6 && (uint8_t)data[0] == 0xCF && (uint8_t)data[1] == 1) {
+                    // talker satellite face frame: magic, 1, emotion, viseme x3 (20 ms each), then Opus
+                    auto* b = (const uint8_t*)data;
+                    uint32_t packed = 0x80000000u | ((uint32_t)(b[2] & 0x7f) << 24) |
+                                      ((uint32_t)b[3] << 16) | ((uint32_t)b[4] << 8) | b[5];
+                    on_incoming_audio_(std::make_unique<AudioStreamPacket>(AudioStreamPacket{
+                        .sample_rate = server_sample_rate_,
+                        .frame_duration = server_frame_duration_,
+                        .timestamp = packed,
+                        .payload = std::vector<uint8_t>(b + 6, b + len)}));
+                } else                 if (version_ == 2) {
                     BinaryProtocol2* bp2 = (BinaryProtocol2*)data;
                     bp2->version = ntohs(bp2->version);
                     bp2->type = ntohs(bp2->type);
@@ -217,6 +227,7 @@ std::string WebsocketProtocol::GetHelloMessage() {
     cJSON_AddBoolToObject(features, "aec", true);
 #endif
     cJSON_AddBoolToObject(features, "mcp", true);
+    cJSON_AddBoolToObject(features, "clara_face", true);
     cJSON_AddItemToObject(root, "features", features);
     AddTextFontCapabilities(root);
     cJSON_AddStringToObject(root, "transport", "websocket");

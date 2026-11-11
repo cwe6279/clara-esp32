@@ -76,3 +76,18 @@ CONFIG_LV_USE_WIN=n
 
 CONFIG_LV_BUILD_EXAMPLES=n
 CONFIG_LV_BUILD_DEMOS=n
+
+# Clara satellite server on the desktop (talker: voice_loop.py --satellite)
+CONFIG_OTA_URL="http://192.168.68.79:8030/xiaozhi/ota/"
+# Clara: only the BOOT button interrupts her, not a noise that sounds like the wake word
+CONFIG_WAKE_WORD_WHILE_SPEAKING=n
+CONFIG_STARTUP_WAKE_WORD_HINT=n
+# Clara answers to her name: the English speech-command model as the wake word
+# (MultiNet 7 takes plain English words). Threshold: smaller = more sensitive.
+# CONFIG_USE_AFE_WAKE_WORD is not set
+CONFIG_USE_CUSTOM_WAKE_WORD=y
+CONFIG_CUSTOM_WAKE_WORD="clara"
+CONFIG_CUSTOM_WAKE_WORD_DISPLAY="Clara"
+CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20
+# CONFIG_SR_MN_EN_NONE is not set
+CONFIG_SR_MN_EN_MULTINET7_QUANT=y

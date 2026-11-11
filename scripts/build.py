@@ -355,6 +355,13 @@ def _wake_word_sdkconfig_options(
 
     if target not in _ESP_WAKE_WORD_TARGETS | _AFE_WAKE_WORD_TARGETS:
         raise ValueError(f"Wake-word selection is not supported for target {target}")
+    if normalized == "custom":
+        # The MultiNet speech-command model as the wake word; the phrase itself is
+        # CONFIG_CUSTOM_WAKE_WORD in sdkconfig.defaults (plain English words for mn7_en).
+        if target not in _AFE_WAKE_WORD_TARGETS:
+            raise ValueError(f"A custom wake word needs an AFE target, not {target}")
+        options.extend(("CONFIG_USE_CUSTOM_WAKE_WORD=y", "CONFIG_SR_MN_EN_MULTINET7_QUANT=y"))
+        return normalized, options, ["CONFIG_USE_CUSTOM_WAKE_WORD", "CONFIG_SR_MN_EN_MULTINET7_QUANT"]
     if not _WAKE_WORD_MODEL_PATTERN.fullmatch(normalized):
         raise ValueError(
             f"Invalid wake word {wake_word!r}. Use 'disabled', "

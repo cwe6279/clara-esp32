@@ -58,6 +58,9 @@ public:
     virtual void SetPowerSaveMode(bool on);
     virtual bool AddTextGlyphs(const std::vector<TextGlyph>& glyphs, uint8_t bpp) { return false; }
     virtual void ClearTextGlyphs() {}
+    // A satellite face: three 20 ms mouth shapes and an emotion riding on the audio frame
+    // that is starting to play now. See boards/waveshare/.../clara_face_display.h.
+    virtual void SetFaceFrame(uint32_t packed) {}
     virtual void SetEmojiCollection(std::shared_ptr<EmojiCollection>) {}
     virtual void SetupUI() { setup_ui_called_ = true; }
     virtual bool IsMonochrome() const { return false; }

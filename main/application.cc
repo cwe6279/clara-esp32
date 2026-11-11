@@ -96,6 +96,12 @@ void Application::Initialize() {
     callbacks.on_playback_progress = [this](uint32_t playback_id, uint32_t media_position_ms) {
         notify_player_.OnPlaybackProgress(playback_id, media_position_ms);
     };
+    callbacks.on_face_frame = [](uint32_t packed) {
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr) {
+            display->SetFaceFrame(packed);
+        }
+    };
     audio_service_.SetCallbacks(callbacks);
 
     // Add state change listeners
@@ -1073,8 +1079,12 @@ void Application::HandleStateChangedEvent() {
 
             if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
+#if CONFIG_WAKE_WORD_WHILE_SPEAKING
                 // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
+#else
+                audio_service_.EnableWakeWordDetection(false);   // a noise never cuts a reply short
+#endif
             }
             audio_service_.ResetDecoder();
             break;
@@ -1094,6 +1104,10 @@ void Application::HandleStateChangedEvent() {
 }
 
 void Application::ShowStartupWakeWordHint() {
+#if !CONFIG_STARTUP_WAKE_WORD_HINT
+    pending_startup_wake_word_hint_ = false;   // Clara: no announcement, the face is enough
+    return;
+#endif
     // A coalesced activation/state event can queue another idle UI cleanup.
     // Wait for it before adding the hint, or ClearChatMessages() would erase it.
     if (!pending_startup_wake_word_hint_ ||
