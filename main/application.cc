@@ -1450,6 +1450,20 @@ void Application::RegisterMcpBroadcastCallback(std::function<void(const std::str
     mcp_broadcast_callback_ = std::move(callback);
 }
 
+void Application::SendBoardEvent(const std::string& kind, const std::string& text) {
+    Schedule([this, kind, text]() {
+        if (!protocol_) return;
+        if (!protocol_->IsAudioChannelOpened()) {
+            if (GetDeviceState() != kDeviceStateIdle) return;
+            if (!protocol_->OpenAudioChannel()) {
+                ESP_LOGW(TAG, "event %s: could not open the channel", kind.c_str());
+                return;
+            }
+        }
+        protocol_->SendBoardEvent(kind, text);
+    });
+}
+
 void Application::SendMcpMessage(const std::string& payload) {
     // Always schedule to run in main task for thread safety
     Schedule([this, payload]() {

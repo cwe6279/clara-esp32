@@ -1011,6 +1011,18 @@ config CLARA_SHUTDOWN_SECONDS
         Only while discharging; -1 never. Counted from the start of idle, so with the
         defaults she listens in the dark for three minutes, then powers off (PWR wakes her).
 
+config CLARA_MOTION_EVENTS
+    bool "Clara face: tell the host when the board is picked up, set down, shaken or tilted"
+    default y
+    help
+        The face reacts to the IMU on its own either way. With this on, the board also opens
+        the channel and sends one {"type":"event"} message, which the host turns into an
+        event prompt for the character; each kind then waits CLARA_MOTION_COOLDOWN_S.
+
+config CLARA_MOTION_COOLDOWN_S
+    int "Clara face: seconds between motion events of the same kind sent to the host"
+    default 20
+
 config WAKE_WORD_WHILE_SPEAKING
     bool "Keep listening for the wake word while speaking (barge-in)"
     default y

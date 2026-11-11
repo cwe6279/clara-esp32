@@ -6,6 +6,17 @@
 
 #define TAG "I2cDevice"
 
+// A shared bus (power chip, codec, touch, IMU) can hand a transaction a timeout now and
+// then; that is a warning and a retry, not a reason to reboot the board.
+static esp_err_t Tolerate(esp_err_t err, const char* what, uint8_t addr, uint8_t reg) {
+    if (err == ESP_OK) return err;
+    static int64_t warned = 0;
+    if (++warned <= 20 || warned % 100 == 0) {
+        ESP_LOGW(TAG, "%s 0x%02x reg 0x%02x: %s", what, addr, reg, esp_err_to_name(err));
+    }
+    return err;
+}
+
 I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr)
     : i2c_bus_(i2c_bus), device_address_(addr) {
     i2c_device_config_t i2c_device_cfg = {
@@ -24,7 +35,9 @@ I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr)
 
 void I2cDevice::WriteReg(uint8_t reg, uint8_t value) {
     uint8_t buffer[2] = {reg, value};
-    ESP_ERROR_CHECK(i2c_master_transmit(i2c_device_, buffer, 2, 100));
+    esp_err_t err = i2c_master_transmit(i2c_device_, buffer, 2, 100);
+    if (err != ESP_OK) err = i2c_master_transmit(i2c_device_, buffer, 2, 100);
+    Tolerate(err, "write", device_address_, reg);
 }
 
 void I2cDevice::WriteRegs(uint8_t reg, const uint8_t* buffer, size_t length) {
@@ -34,18 +47,24 @@ void I2cDevice::WriteRegs(uint8_t reg, const uint8_t* buffer, size_t length) {
     }
     tx[0] = reg;
     memcpy(tx + 1, buffer, length);
-    ESP_ERROR_CHECK(i2c_master_transmit(i2c_device_, tx, length + 1, 100));
+    esp_err_t err = i2c_master_transmit(i2c_device_, tx, length + 1, 100);
+    if (err != ESP_OK) err = i2c_master_transmit(i2c_device_, tx, length + 1, 100);
+    Tolerate(err, "write", device_address_, reg);
     free(tx);
 }
 
 uint8_t I2cDevice::ReadReg(uint8_t reg) {
-    uint8_t buffer[1];
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, 1, 100));
+    uint8_t buffer[1] = {0};
+    esp_err_t err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, 1, 100);
+    if (err != ESP_OK) err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, 1, 100);
+    Tolerate(err, "read", device_address_, reg);
     return buffer[0];
 }
 
 void I2cDevice::ReadRegs(uint8_t reg, uint8_t* buffer, size_t length) {
-    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100));
+    esp_err_t err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100);
+    if (err != ESP_OK) err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100);
+    Tolerate(err, "read", device_address_, reg);
 }
 
 esp_err_t I2cDevice::ResetBus(const char* reason) {

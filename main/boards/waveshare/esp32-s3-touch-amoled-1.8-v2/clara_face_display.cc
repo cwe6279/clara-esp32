@@ -15,6 +15,7 @@
 #define TAG "ClaraFace"
 
 #include "clara_face_layout.h"             // generated: talker tools/satellite_face_art.py
+#include "clara_motion.h"
 
 extern "C" {
 extern const lv_image_dsc_t FACE_SYM(mouth_sil), FACE_SYM(mouth_pp), FACE_SYM(mouth_ee),
@@ -401,6 +402,8 @@ bool ClaraFaceDisplay::BecameReady() {
 void ClaraFaceDisplay::Tick() {
     int64_t now = esp_timer_get_time();
     EarsBack(now);
+    int mk = motion_kind_.exchange(-1);
+    if (mk >= 0) OnMotion(mk, now);
 
     if (sleeping_) {
         auto& app = Application::GetInstance();
@@ -462,12 +465,23 @@ void ClaraFaceDisplay::Tick() {
         target_y_ = rad * sinf(ang) * 0.6f;
         next_gaze_us_ = now + (int64_t)(2500 + esp_random() % 4500) * 1000;
     }
-    bool laughing = now < laugh_until_us_;
+    bool laughing = now < laugh_until_us_ || (kComposed && now < startle_until_us_);
     bool looking = now < look_until_us_;
     bool told = now < cmd_look_until_us_.load();       // the host said where to look
     float tx = looking ? look_x_ : told ? cmd_look_x_.load() : target_x_;
     float ty = looking ? look_y_ : told ? cmd_look_y_.load() : target_y_;
     looking = looking || told;
+    float roll = pose_roll_.load();
+    bool dizzy = !kComposed && now < startle_until_us_;
+    if (dizzy) {                                        // shaken: the eyes swim
+        tx = 0.4f * sinf(now / 1.0e6f * 9.0f);
+        ty = 0.2f * cosf(now / 1.0e6f * 7.0f);
+        looking = true;
+    } else if (!looking && fabsf(roll) > 8.0f) {        // tilted: she looks toward the side that went up
+        tx = -sinf(roll * (float)M_PI / 180.0f) * 0.45f;
+        ty = target_y_;
+        looking = true;
+    }
     gaze_x_ += (tx - gaze_x_) * (looking ? 0.3f : 0.12f);
     gaze_y_ += (ty - gaze_y_) * (looking ? 0.3f : 0.12f);
     int dx = (int)lroundf(gaze_x_ * kEyeSize * 0.5f);
@@ -488,7 +502,7 @@ void ClaraFaceDisplay::Tick() {
     } else if (now >= next_blink_us_) {
         blink_step_ = 0;
     }
-    bool boop = now < boop_until_us_;
+    bool boop = now < boop_until_us_ || dizzy;
     int laugh_beat = (int)((now / 1000) / 350) % 2;     // a slow ha-ha
     int edy, emo;
     if (kComposed) {
@@ -515,6 +529,7 @@ void ClaraFaceDisplay::Tick() {
         edy = laughing ? (laugh_beat ? -2 : -8) : boop ? -12 : held_ ? -4 : emotion_dy_.load();
         emo = (laughing || held_) ? 1 : emotion_.load();    // the happy lid cut
     }
+    if (face_down_) lid = kLidLevels - 1;               // lying on her face: eyes shut
     if (edy != shown_emotion_dy_) {
         shown_emotion_dy_ = edy;
         PlaceEyes();
@@ -535,6 +550,54 @@ void ClaraFaceDisplay::Tick() {
 }
 
 // ── events from the rest of the firmware ─────────────────────────────────────
+void ClaraFaceDisplay::Motion(int kind) {
+    motion_kind_.store(kind);
+    // asleep on battery the face timer is paused and the panel is dark: being picked up
+    // brings her back, as a tap would
+    if (kind == ClaraMotion::kPickedUp && panel_asleep_ && on_touch_wake_) {
+        Application::GetInstance().Schedule([this]() {
+            if (panel_asleep_ && on_touch_wake_) { ESP_LOGI(TAG, "picked up while asleep on battery"); on_touch_wake_(); }
+        });
+    }
+}
+
+void ClaraFaceDisplay::Pose(float roll_deg, float up_z) {
+    pose_roll_.store(roll_deg);
+}
+
+// LVGL task, from Tick. The clips: Clara is composed ("Gently, please." when shaken,
+// "Hm?" when picked up); a playful character gets a "Whoa!" and wide eyes instead.
+void ClaraFaceDisplay::OnMotion(int kind, int64_t now) {
+    if (sleeping_) {
+        if (kind == ClaraMotion::kPickedUp) WakeFromSleep("picked up");
+        return;
+    }
+    if (!ready_) return;
+    switch (kind) {
+        case ClaraMotion::kPickedUp:
+            if (kComposed) { if (blink_step_ < 0) blink_step_ = 0; }
+            else boop_until_us_ = now + (int64_t)kBoopMs * 1000;
+            look_x_ = 0; look_y_ = -0.3f;              // up, at whoever has her
+            look_until_us_ = now + 1500 * 1000;
+            Say(Lang::Sounds::OGG_HM, last_hm_us_);
+            break;
+        case ClaraMotion::kSetDown:
+            if (blink_step_ < 0) blink_step_ = 0;
+            break;
+        case ClaraMotion::kShaken:
+            startle_until_us_ = now + 2500 * 1000;
+            if (kComposed) Say(Lang::Sounds::OGG_GENTLY, last_gently_us_);
+            else Say(Lang::Sounds::OGG_WHOA, last_whoa_us_);
+            break;
+        case ClaraMotion::kFaceDown:
+            face_down_ = true;
+            break;
+        default:                                       // upright, tilted, face up, upside down
+            face_down_ = false;
+            break;
+    }
+}
+
 void ClaraFaceDisplay::SetLook(float x, float y, int hold_ms) {
     x = x < -1 ? -1 : x > 1 ? 1 : x;
     y = y < -1 ? -1 : y > 1 ? 1 : y;

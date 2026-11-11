@@ -66,6 +66,7 @@ public:
     virtual void SendStopListening();
     virtual void SendAbortSpeaking(AbortReason reason);
     virtual void SendMcpMessage(const std::string& message);
+    virtual void SendBoardEvent(const std::string& kind, const std::string& text);   // picked up, shaken: the host decides
 
 protected:
     std::function<void(const cJSON* root)> on_incoming_json_;

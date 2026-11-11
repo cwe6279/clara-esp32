@@ -72,6 +72,12 @@ void Protocol::SendAbortSpeaking(AbortReason reason) {
     SendText(message);
 }
 
+void Protocol::SendBoardEvent(const std::string& kind, const std::string& text) {
+    std::string json = "{\"session_id\":\"" + session_id_ + "\",\"type\":\"event\",\"kind\":\"" + kind +
+                       "\",\"text\":\"" + text + "\"}";
+    SendText(json);
+}
+
 void Protocol::SendWakeWordDetected(const std::string& wake_word) {
     std::string json = "{\"session_id\":\"" + session_id_ +
                        "\",\"type\":\"listen\",\"state\":\"detect\",\"text\":\"" + wake_word +

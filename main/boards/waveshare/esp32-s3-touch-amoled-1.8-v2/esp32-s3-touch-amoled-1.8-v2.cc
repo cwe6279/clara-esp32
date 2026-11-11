@@ -9,6 +9,7 @@
 #include "mcp_server.h"
 #include "config.h"
 #include "clara_face_display.h"
+#include "clara_motion.h"
 #include "power_save_timer.h"
 #include "axp2101.h"
 #include "i2c_device.h"
@@ -154,6 +155,10 @@ private:
     Pmic* pmic_ = nullptr;
     Button boot_button_;
     LcdDisplay* display_;
+    ClaraFaceDisplay* face_ = nullptr;
+    ClaraMotion* motion_ = nullptr;
+    int64_t last_event_us_[8] = {};       // per kind: the last one sent to the host
+    int64_t last_any_event_us_ = 0;
     CustomBacklight* backlight_;
     esp_io_expander_handle_t io_expander = NULL;
     PowerSaveTimer* power_save_timer_;
@@ -359,6 +364,7 @@ private:
                                          DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
         face->OnTouchWake([this]() { power_save_timer_->WakeUp(); });
         display_ = face;
+        face_ = face;
         backlight_ = new CustomBacklight(panel_io);
         backlight_->RestoreBrightness();
     }
@@ -401,6 +407,27 @@ private:
     }
 
     // 初始化工具
+    // The IMU: the face reacts to every event at once; the host hears one event per kind,
+    // then nothing of that kind for a while, so a bumpy desk is not a running commentary.
+    void InitializeMotion() {
+        motion_ = new ClaraMotion();
+        motion_->Start(codec_i2c_bus_,
+            [this](ClaraMotion::Kind k, const ClaraMotion::Pose& p) {
+                if (face_) face_->Motion((int)k);
+#if CONFIG_CLARA_MOTION_EVENTS
+                if (k == ClaraMotion::kUpright) return;           // settling back is not news
+                int64_t now = esp_timer_get_time();
+                if (now - last_event_us_[k] < (int64_t)CONFIG_CLARA_MOTION_COOLDOWN_S * 1000000 ||
+                    now - last_any_event_us_ < 5 * 1000000) return;
+                last_event_us_[k] = now;
+                last_any_event_us_ = now;
+                Application::GetInstance().SendBoardEvent(ClaraMotion::Name(k), ClaraMotion::Phrase(k, p));
+#endif
+            },
+            // the eyes follow the roll only while she is more or less standing; flat, roll is noise
+            [this](const ClaraMotion::Pose& p) { if (face_) face_->Pose(p.up_y > 0.3f ? p.roll_deg : 0.0f, p.up_z); });
+    }
+
     void InitializeTools() {
         auto &mcp_server = McpServer::GetInstance();
         mcp_server.AddTool("self.system.reconfigure_wifi",
@@ -421,7 +448,8 @@ public:
         InitializeAxp2101();
         InitializeSpi();
         InitializeDisplay();
-         InitializeTouch();
+        InitializeTouch();
+        InitializeMotion();
         InitializeButtons();
         InitializeTools();
     }

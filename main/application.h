@@ -113,6 +113,9 @@ public:
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
+    // Something happened to the board (picked up, shaken): tell the host, opening the
+    // channel first if it is closed and the device is idle. The host decides what it means.
+    void SendBoardEvent(const std::string& kind, const std::string& text);
     void RegisterMcpBroadcastCallback(std::function<void(const std::string&)> callback);
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }

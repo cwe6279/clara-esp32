@@ -28,6 +28,9 @@ public:
     // A tap while the panel sleeps on battery: the board hands it to its power-save timer,
     // which brings the face back and restarts the idle countdown (nothing is bypassed).
     void OnTouchWake(std::function<void()> cb) { on_touch_wake_ = cb; }
+    // From the IMU task (ClaraMotion::Kind): recorded here, reacted to on the next tick.
+    void Motion(int kind);
+    void Pose(float roll_deg, float up_z);         // ten times a second: the eyes follow the tilt
 
 private:
     struct Eye {
@@ -51,6 +54,7 @@ private:
     static void TouchEvent(lv_event_t* e);
     void OnTouch(lv_event_code_t code, int x, int y);
     void Tickled(int64_t now);
+    void OnMotion(int kind, int64_t now);
     void Say(const std::string_view& clip, int64_t& last_us);
     void EarsBack(int64_t now);
     void PanelSleep(bool asleep);
@@ -117,4 +121,10 @@ private:
     bool panel_asleep_ = false;
     std::function<void()> on_touch_wake_;
     bool drowsy_ = false;                      // lids parted, not yet open
+    // motion (from the IMU task): the last event not yet reacted to, and the tilt
+    std::atomic<int> motion_kind_{-1};
+    std::atomic<float> pose_roll_{0};
+    int64_t startle_until_us_ = 0;             // shaken: a hard look (composed) or dizzy (playful)
+    bool face_down_ = false;                   // lying on her face: eyes shut
+    int64_t last_gently_us_ = 0, last_whoa_us_ = 0;
 };

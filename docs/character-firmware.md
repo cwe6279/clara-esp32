@@ -107,8 +107,13 @@ look; a rub or three quick taps gets a half-lidded look, eyes drifting up, a thr
 "Let's keep it professional." Off (playful): wide eyes on a tap, a contented squint on a hold,
 and a slow ha-ha with a giggle. A two-second hold puts either to sleep; a tap wakes.
 
+Motion reactions follow the same split. Composed: a blink, a glance up and "Hm?" when picked
+up, the tickle look and "Gently, please." when shaken. Playful: wide eyes when picked up,
+swimming eyes and "Whoa! Easy!" when shaken. Either: a blink when set down, eyes shut while
+lying face down, and the gaze drifting toward the side that went up while tilted.
+
 The clips are OGG files in `main/assets/common/`: `hm.ogg`, `mmm.ogg`, `giggle.ogg`,
-`professional.ogg`. The build embeds every OGG in that folder and names it
+`professional.ogg`, `gently.ogg`, `whoa.ogg`. The build embeds every OGG in that folder and names it
 `Lang::Sounds::OGG_<NAME>` in the generated `main/assets/lang_config.h`; delete that header to
 force regeneration when you add a file. The face engine plays them in `Say(...)`, only while
 the board is idle (in a conversation the host owns the audio), at most once per 8 s each, with
@@ -127,7 +132,7 @@ ffmpeg -i professional.mp3 \
 ```
 
 48 kHz mono Opus in OGG with 60 ms frames is what the other clips are. To change which clip a
-reaction plays, or add a reaction, edit `OnTouch`, `Tickled` and the `Say` calls in
+reaction plays, or add a reaction, edit `OnTouch`, `Tickled`, `OnMotion` and the `Say` calls in
 `clara_face_display.cc`; a new temperament is a new `CONFIG_` option in `main/Kconfig.projbuild`
 and a branch in `Tick` where `kComposed` is tested.
 
@@ -209,6 +214,11 @@ protocol (`docs/websocket.md`):
   "look left" is handled before the brain sees it.
 - The device status the server asks for on connect carries the battery voltage next to the
   percentage; the host puts a line about the board into the character's context.
+- `{"type":"event","kind":"picked_up","text":"picked up"}` goes the other way: the board
+  opens the channel if it is closed and idle, and sends one event (picked up, set down, shaken,
+  tilted, face down, face up, upside down), then nothing of that kind for
+  `CONFIG_CLARA_MOTION_COOLDOWN_S`. The host makes it an event prompt for the character and
+  drops it if she is busy. `CONFIG_CLARA_MOTION_EVENTS=n` keeps the reactions local.
 - The host closes the channel 40 s after the last reply; that is when the board's idle starts.
 
 Three timing rules the board imposes, each learned the hard way: pace the audio (the board
@@ -230,12 +240,16 @@ power-save timer in the board file owns battery sleep (`SetPowerSaveMode`); a ta
 panel sleeps on battery hands it a wake, so the idle countdown restarts rather than being
 bypassed. `Say` plays a clip and pauses the ears; `EarsBack` restores them.
 
-Adding a sensor: the QMI8658 IMU is on the same I2C bus as the touch and power chips and is
-not initialised. Read it in the board file, decide "picked up", "tilted" or "shaken" there, and
-call a new method on the display the way `SetLook` is called; keep the decision out of the
-LVGL task. For the host to hear about it, the board has to open the channel itself (as it does
-for the wake word) and send one message, then stay quiet for a cooldown: one event, not a
-stream.
+The IMU (`clara_motion.cc`) is the pattern for any sensor: its own task reads the chip (the
+QMI8658, on the same I2C bus as the touch and power chips), low-passes gravity out of the
+accelerometer, and decides "picked up", "set down", "shaken" and the orientation there. It
+reports through two callbacks the board file wires up: an event, which the board hands to the
+face (`Motion`, an atomic that `Tick` reacts to as `OnMotion`) and, sampled, to the host
+(`Application::SendBoardEvent`); and the pose ten times a second (`Pose`, for the eyes).
+Nothing in that task touches LVGL. The chip's axes are mapped to face axes (right, up, out of
+the screen) in `MapAxes`; the task logs the pose every 10 s, so a different board is a matter
+of standing it up, tilting it, reading the log and editing that function. The thresholds are
+the constants at the top of the file.
 
 ## 8. Known limits
 
