@@ -51,7 +51,7 @@ static const float kGazeRadius = 0.35f;               // face.json gaze_radius
 static const Place kEyeCentre[2] = {{87, 188}, {281, 188}};
 static const int kBlinkSteps[] = {1, 2, 3, 4, 3, 2, 1, 0};
 static const int kTickMs = 20;
-static const int kListenSettleMs = 1500;             // mic open to eyes open
+static const int kListenSettleMs = CONFIG_CLARA_LISTEN_SETTLE_MS;   // mic open to eyes open
 
 ClaraFaceDisplay::ClaraFaceDisplay(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t panel_handle,
                                    int width, int height, int offset_x, int offset_y,
@@ -214,8 +214,9 @@ bool ClaraFaceDisplay::BecameReady() {
         listening_since_us_ = 0;
         return false;
     }
-    // The detector needs a moment of room sound before it catches a word; a "Clara" said
-    // the instant the eyes open was being missed. Keep them shut a little longer.
+    // The detector misses words said in its first seconds (every boot log puts the first
+    // catch 3 to 5 s after the mic opens, whenever the name was said); the eyes stay shut
+    // until it is worth saying her name.
     int64_t now = esp_timer_get_time();
     if (listening_since_us_ == 0) listening_since_us_ = now;
     if (now - listening_since_us_ < kListenSettleMs * 1000) return false;
