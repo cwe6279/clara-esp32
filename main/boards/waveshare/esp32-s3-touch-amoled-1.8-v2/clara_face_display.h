@@ -42,6 +42,8 @@ private:
     static void FaceTimer(lv_timer_t* timer);
     void Tick();
     bool BecameReady();
+    static void TouchEvent(lv_event_t* e);
+    void OnTouch(lv_event_code_t code, int x, int y);
     void BuildEye(Eye& eye, lv_obj_t* screen, const lv_image_dsc_t* sclera,
                   const lv_image_dsc_t* iris, const lv_image_dsc_t* const* lids,
                   const lv_image_dsc_t* const* emos);
@@ -75,5 +77,18 @@ private:
     // Eyes closed from power-on until the wake word is listening; then they open once.
     bool ready_ = false;
     int64_t listening_since_us_ = 0;
+
+    // touch (LVGL task only): a tap is a blink and a look, a hold a squint, a rub or
+    // three quick taps a laugh
+    static const int kTapHistory = 4;
+    int64_t tap_us_[kTapHistory] = {0, 0, 0, 0};
+    int tap_next_ = 0;
+    int64_t press_start_us_ = 0;
+    int last_touch_x_ = 0, last_touch_y_ = 0;
+    int travel_px_ = 0;
+    bool held_ = false;
+    int64_t look_until_us_ = 0;
+    float look_x_ = 0, look_y_ = 0;
+    int64_t laugh_until_us_ = 0;
     bool drowsy_ = false;                      // lids parted, not yet open
 };

@@ -8,6 +8,7 @@
 #include <esp_random.h>
 #include <esp_timer.h>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #define TAG "ClaraFace"
@@ -68,6 +69,7 @@ void ClaraFaceDisplay::BuildEye(Eye& eye, lv_obj_t* screen,
     lv_obj_set_size(eye.box, kEyeSize, kEyeSize);     // the lid overlay masks outside the eye
     lv_obj_set_style_bg_opa(eye.box, LV_OPA_TRANSP, 0);
     lv_obj_remove_flag(eye.box, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(eye.box, LV_OBJ_FLAG_CLICKABLE);   // touches go to the screen
 
     eye.sclera = lv_image_create(eye.box);
     lv_image_set_src(eye.sclera, sclera);
@@ -147,6 +149,13 @@ void ClaraFaceDisplay::SetupUI() {
         area->x2 |= 1;  area->y2 |= 1;
     }, LV_EVENT_INVALIDATE_AREA, nullptr);
 
+    // Touch: a tap gets a blink and a look; a hold a squint; taps in a row or a rub, a laugh.
+    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(screen, LV_OBJ_FLAG_CLICKABLE);
+    for (auto ev : {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED}) {
+        lv_obj_add_event_cb(screen, &ClaraFaceDisplay::TouchEvent, ev, this);
+    }
+
     int64_t now = esp_timer_get_time();
     next_gaze_us_ = now + 2000 * 1000;
     next_blink_us_ = now + 2500 * 1000;
@@ -157,6 +166,55 @@ void ClaraFaceDisplay::SetupUI() {
 // ── per-tick animation, inside the LVGL task ─────────────────────────────────
 void ClaraFaceDisplay::FaceTimer(lv_timer_t* timer) {
     static_cast<ClaraFaceDisplay*>(lv_timer_get_user_data(timer))->Tick();
+}
+
+// ── touch, also inside the LVGL task ─────────────────────────────────────────
+static const int kTickleTaps = 3;                      // taps within kTickleWindowMs
+static const int kTickleWindowMs = 1500;
+static const int kTickleTravelPx = 120;                // a finger rubbed this far in one press
+static const int kHoldMs = 350;
+static const int kLaughMs = 1800;
+static const int kLookMs = 1500;
+
+void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
+    auto self = static_cast<ClaraFaceDisplay*>(lv_event_get_user_data(e));
+    lv_point_t p = {0, 0};
+    if (auto indev = lv_event_get_indev(e)) lv_indev_get_point(indev, &p);
+    self->OnTouch(lv_event_get_code(e), p.x, p.y);
+}
+
+void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
+    if (!ready_) return;                               // asleep: not ticklish yet
+    int64_t now = esp_timer_get_time();
+    if (code == LV_EVENT_PRESSED) {
+        press_start_us_ = now;
+        travel_px_ = 0;
+        last_touch_x_ = x; last_touch_y_ = y;
+        // a tap: she blinks and looks at your finger
+        if (blink_step_ < 0) blink_step_ = 0;
+        look_until_us_ = now + (int64_t)kLookMs * 1000;
+        // taps in a row
+        int64_t window = now - (int64_t)kTickleWindowMs * 1000;
+        int n = 0;
+        for (int i = 0; i < kTapHistory; i++) if (tap_us_[i] > window) n++;
+        tap_us_[tap_next_++ % kTapHistory] = now;
+        if (n + 1 >= kTickleTaps) laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+    } else if (code == LV_EVENT_PRESSING) {
+        travel_px_ += abs(x - last_touch_x_) + abs(y - last_touch_y_);
+        last_touch_x_ = x; last_touch_y_ = y;
+        look_until_us_ = now + (int64_t)kLookMs * 1000;
+        held_ = now - press_start_us_ > (int64_t)kHoldMs * 1000;
+        if (travel_px_ > kTickleTravelPx) {            // rubbed: that tickles
+            laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+            travel_px_ = 0;
+        }
+    } else if (code == LV_EVENT_RELEASED) {
+        held_ = false;
+    }
+    // where the finger is, as a gaze target: fractions of the eye radius
+    float fx = (x - LV_HOR_RES / 2.0f) / (LV_HOR_RES / 2.0f);
+    float fy = (y - LV_VER_RES / 2.0f) / (LV_VER_RES / 2.0f);
+    look_x_ = fx * 0.45f; look_y_ = fy * 0.30f;
 }
 
 void ClaraFaceDisplay::ApplyMouth(int viseme) {
@@ -262,8 +320,12 @@ void ClaraFaceDisplay::Tick() {
         target_y_ = rad * sinf(ang) * 0.6f;
         next_gaze_us_ = now + (int64_t)(2500 + esp_random() % 4500) * 1000;
     }
-    gaze_x_ += (target_x_ - gaze_x_) * 0.12f;
-    gaze_y_ += (target_y_ - gaze_y_) * 0.12f;
+    bool laughing = now < laugh_until_us_;
+    bool looking = now < look_until_us_;
+    float tx = looking ? look_x_ : target_x_;
+    float ty = looking ? look_y_ : target_y_;
+    gaze_x_ += (tx - gaze_x_) * (looking ? 0.3f : 0.12f);
+    gaze_y_ += (ty - gaze_y_) * (looking ? 0.3f : 0.12f);
     int dx = (int)lroundf(gaze_x_ * kEyeSize * 0.5f);
     int dy = (int)lroundf(gaze_y_ * kEyeSize * 0.5f);
     if (dx > kMaxShift) dx = kMaxShift;
@@ -282,13 +344,19 @@ void ClaraFaceDisplay::Tick() {
     } else if (now >= next_blink_us_) {
         blink_step_ = 0;
     }
+    if (laughing) {
+        lid = ((now / 1000) / 150) % 2 ? 2 : 0;        // eyes crinkle
+        if (!speaking) ApplyMouth(2);                   // a grin ("ee")
+    } else if (held_) {
+        lid = 2;                                        // squished: a squint
+    }
 
-    int edy = emotion_dy_.load();
+    int edy = laughing ? -6 : emotion_dy_.load();
     if (edy != shown_emotion_dy_) {
         shown_emotion_dy_ = edy;
         PlaceEyes();
     }
-    int emo = emotion_.load();
+    int emo = laughing ? 1 : emotion_.load();
     for (auto& eye : eyes_) {
         ApplyGaze(eye, dx, dy);
         ApplyLid(eye, lid);
