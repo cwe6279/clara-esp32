@@ -218,6 +218,7 @@ private:
             GetBacklight()->RestoreBrightness();
         });
         power_save_timer_->OnShutdownRequest([this]() {
+            if (pmic_ == nullptr) return;
             int level = 0, mv = 0;
             bool charging = false, discharging = false;
             GetBatteryLevel(level, charging, discharging);
@@ -263,8 +264,31 @@ private:
         ESP_ERROR_CHECK(ret);
     }
 
+    // After a power-on from the PWR button the AXP2101 does not answer on I2C for a while,
+    // and the first register write aborted the boot (ESP_ERROR_CHECK in WriteReg); the chip
+    // then rebooted every second until the write went through, which was the long cold start.
+    // Wait for the chip to acknowledge its address, recovering the bus along the way.
     void InitializeAxp2101() {
         ESP_LOGI(TAG, "Init AXP2101");
+        esp_err_t err = ESP_FAIL;
+        for (int attempt = 0; attempt < 100; attempt++) {           // up to ~5 s
+            err = i2c_master_probe(codec_i2c_bus_, 0x34, 20);
+            if (err == ESP_OK) {
+                if (attempt > 0) {
+                    ESP_LOGW(TAG, "AXP2101 answered after %d ms", attempt * 50);
+                }
+                break;
+            }
+            if (attempt % 20 == 19) {
+                ESP_LOGW(TAG, "AXP2101 not answering (%s), resetting the I2C bus", esp_err_to_name(err));
+                i2c_master_bus_reset(codec_i2c_bus_);
+            }
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "AXP2101 never answered; running without battery or power-off support");
+            return;
+        }
         pmic_ = new Pmic(codec_i2c_bus_, 0x34);
         pmic_->EnablePowerButtonShortPressIrq();
     }
@@ -416,6 +440,7 @@ public:
     }
 
     virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging) override {
+        if (pmic_ == nullptr) return false;
         charging = pmic_->IsCharging();
         discharging = pmic_->IsDischarging();
         if ((int)discharging != last_discharging_) {   // first poll included: -1 matches neither
@@ -430,7 +455,7 @@ public:
     }
 
     virtual bool GetBatteryVoltage(int& millivolts) override {
-        return pmic_->GetBatteryVoltage(millivolts);
+        return pmic_ != nullptr && pmic_->GetBatteryVoltage(millivolts);
     }
 
     virtual void SetPowerSaveLevel(PowerSaveLevel level) override {

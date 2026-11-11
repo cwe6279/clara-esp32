@@ -1,5 +1,6 @@
 #include "clara_face_display.h"
 #include "application.h"
+#include "board.h"
 #include "esp_lcd_panel_ops.h"
 #include "lvgl_theme.h"
 
@@ -50,6 +51,7 @@ static const float kGazeRadius = 0.35f;               // face.json gaze_radius
 static const Place kEyeCentre[2] = {{87, 188}, {281, 188}};
 static const int kBlinkSteps[] = {1, 2, 3, 4, 3, 2, 1, 0};
 static const int kTickMs = 20;
+static const int kListenSettleMs = 1500;             // mic open to eyes open
 
 ClaraFaceDisplay::ClaraFaceDisplay(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t panel_handle,
                                    int width, int height, int offset_x, int offset_y,
@@ -206,9 +208,17 @@ void ClaraFaceDisplay::SetPowerSaveMode(bool on) {
 // listening, so the eyes stay shut; a face with open eyes means "say Clara".
 bool ClaraFaceDisplay::BecameReady() {
     auto& app = Application::GetInstance();
-    if (app.GetDeviceState() != kDeviceStateIdle || !app.GetAudioService().IsWakeWordRunning()) {
+    auto codec = Board::GetInstance().GetAudioCodec();
+    if (app.GetDeviceState() != kDeviceStateIdle || !app.GetAudioService().IsWakeWordRunning() ||
+        codec == nullptr || !codec->input_enabled()) {
+        listening_since_us_ = 0;
         return false;
     }
+    // The detector needs a moment of room sound before it catches a word; a "Clara" said
+    // the instant the eyes open was being missed. Keep them shut a little longer.
+    int64_t now = esp_timer_get_time();
+    if (listening_since_us_ == 0) listening_since_us_ = now;
+    if (now - listening_since_us_ < kListenSettleMs * 1000) return false;
     ready_ = true;
     blink_step_ = 4;                           // the second half of a blink: lids 3, 2, 1, 0
     ESP_LOGI(TAG, "Listening: eyes open");
