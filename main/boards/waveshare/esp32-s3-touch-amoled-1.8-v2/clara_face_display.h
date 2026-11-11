@@ -101,7 +101,7 @@ private:
     float look_x_ = 0, look_y_ = 0;
     int64_t laugh_until_us_ = 0;
     int64_t boop_until_us_ = 0;
-    int64_t last_hm_us_ = 0, last_mmm_us_ = 0, last_giggle_us_ = 0;
+    int64_t last_hm_us_ = 0, last_mmm_us_ = 0, last_giggle_us_ = 0, last_professional_us_ = 0;
     bool swallow_press_ = false;               // the press that woke her, or put her to sleep
     bool sleeping_ = false;                    // put to sleep by hand (a long hold)
     int64_t sleep_at_us_ = 0;

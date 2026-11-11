@@ -203,7 +203,7 @@ void ClaraFaceDisplay::Tickled(int64_t now) {
     bool fresh = now >= laugh_until_us_;
     laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
     if (!fresh) return;
-    if (kComposed) Say(Lang::Sounds::OGG_MMM, last_mmm_us_);   // a patient sigh
+    if (kComposed) Say(Lang::Sounds::OGG_PROFESSIONAL, last_professional_us_);   // a throat-clear: "Let's keep it professional."
     else Say(Lang::Sounds::OGG_GIGGLE, last_giggle_us_);
 }
 
@@ -251,7 +251,7 @@ void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
         last_touch_x_ = x; last_touch_y_ = y;
         look_until_us_ = now + (int64_t)kLookMs * 1000;
         bool held = now - press_start_us_ > (int64_t)kHoldMs * 1000;
-        if (held && !held_) Say(Lang::Sounds::OGG_MMM, last_mmm_us_);
+        if (held && !held_ && !kComposed) Say(Lang::Sounds::OGG_MMM, last_mmm_us_);   // composed: the look says it
         held_ = held;
         if (now - press_start_us_ > (int64_t)kSleepHoldMs * 1000 && travel_px_ < kTickleTravelPx) {
             GoToSleep();

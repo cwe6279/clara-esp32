@@ -985,8 +985,8 @@ config CLARA_TOUCH_COMPOSED
     bool "Clara face: composed touch reactions (a serious assistant), not playful ones"
     default y
     help
-        Composed: a tap gets a glance and "Hm?", a hold gets patience, tickling gets a
-        half-lidded, faintly annoyed look. Playful (off): wide eyes, a contented squint,
+        Composed: a tap gets a glance and "Hm?", a hold gets a patient look (no sound), tickling
+        a half-lidded look and a throat-clear: "Let's keep it professional." Playful (off): wide eyes, a contented squint,
         and a ha-ha with a giggle. The reactions belong to the character, not the board.
 
 config CLARA_LISTEN_SETTLE_MS
