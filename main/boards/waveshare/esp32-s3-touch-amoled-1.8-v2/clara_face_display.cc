@@ -57,6 +57,7 @@ static const Place kEyeCentre[2] = {{FACE_EYE_L_CX, FACE_EYE_L_CY}, {FACE_EYE_R_
 static const int kBlinkSteps[] = {1, 2, 3, 4, 3, 2, 1, 0};
 static const int kTickMs = 20;
 static const int kListenSettleMs = CONFIG_CLARA_LISTEN_SETTLE_MS;   // mic open to eyes open
+static const int kDozeMs = CONFIG_CLARA_DOZE_SECONDS * 1000;        // idle to eyes closed; 0 never
 
 ClaraFaceDisplay::ClaraFaceDisplay(esp_lcd_panel_io_handle_t io_handle, esp_lcd_panel_handle_t panel_handle,
                                    int width, int height, int offset_x, int offset_y,
@@ -232,6 +233,7 @@ void ClaraFaceDisplay::Tickled(int64_t now) {
 void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
     if (!ready_) return;                               // not up yet
     int64_t now = esp_timer_get_time();
+    idle_since_us_ = now;
     if (code != LV_EVENT_PRESSING) {
         ESP_LOGI(TAG, "touch %s at %d,%d", code == LV_EVENT_PRESSED ? "down" : "up", x, y);
     }
@@ -367,6 +369,7 @@ void ClaraFaceDisplay::GoToSleep() {
 void ClaraFaceDisplay::WakeFromSleep(const char* why) {
     if (!sleeping_) return;
     sleeping_ = false;
+    idle_since_us_ = esp_timer_get_time();
     if (status_bar_) lv_obj_remove_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
     if (mouth_) lv_obj_remove_flag(mouth_, LV_OBJ_FLAG_HIDDEN);
     if (subtitle_) lv_obj_remove_flag(subtitle_, LV_OBJ_FLAG_HIDDEN);
@@ -394,6 +397,7 @@ bool ClaraFaceDisplay::BecameReady() {
     drowsy_ = waited >= kListenSettleMs * 1000 * 2 / 3;
     if (waited < kListenSettleMs * 1000) return false;
     ready_ = true;
+    idle_since_us_ = now;                      // the doze counts from here, not from power-on
     blink_step_ = 5;                           // the rest of a blink: lids 2, 1, 0
     ESP_LOGI(TAG, "Listening: eyes open");
     return true;
@@ -403,7 +407,16 @@ void ClaraFaceDisplay::Tick() {
     int64_t now = esp_timer_get_time();
     EarsBack(now);
     int mk = motion_kind_.exchange(-1);
-    if (mk >= 0) OnMotion(mk, now);
+    if (mk >= 0) { idle_since_us_ = now; OnMotion(mk, now); }
+
+    // Nothing for a while (no conversation, no touch, no motion): she dozes off and waits
+    // for her name. Noises are not events: while idle the board hears only the wake word.
+    if (Application::GetInstance().GetDeviceState() != kDeviceStateIdle || idle_since_us_ == 0) {
+        idle_since_us_ = now;
+    } else if (!sleeping_ && ready_ && kDozeMs > 0 && now - idle_since_us_ > (int64_t)kDozeMs * 1000) {
+        ESP_LOGI(TAG, "nothing for %d s: dozing off", kDozeMs / 1000);
+        GoToSleep();
+    }
 
     if (sleeping_) {
         auto& app = Application::GetInstance();

@@ -1023,6 +1023,24 @@ config CLARA_MOTION_COOLDOWN_S
     int "Clara face: seconds between motion events of the same kind sent to the host"
     default 20
 
+config CLARA_MOTION_EVENTS_OPEN
+    bool "Clara face: a motion event may open the channel by itself"
+    default n
+    help
+        Off: events reach the host only during a conversation; between conversations she
+        waits for her name and reacts to being handled on her own (a glance, a clip). On:
+        being picked up or shaken opens the channel and the character speaks up unasked,
+        which, while she is carried about, never lets her rest.
+
+config CLARA_DOZE_SECONDS
+    int "Clara face: seconds idle (channel closed, nothing happening) before she dozes off"
+    default 10
+    help
+        The hand-made sleep: eyes closed, screen black, the wake word still listening; a tap,
+        her name or being picked up wakes her. 0 never. The host closes the channel some
+        seconds after the last reply, so the time from the last word to sleep is that plus
+        this. On battery the deeper panel sleep and the power-off still follow on their own.
+
 config WAKE_WORD_WHILE_SPEAKING
     bool "Keep listening for the wake word while speaking (barge-in)"
     default y

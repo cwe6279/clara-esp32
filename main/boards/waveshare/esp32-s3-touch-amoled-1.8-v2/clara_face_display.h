@@ -127,4 +127,5 @@ private:
     int64_t startle_until_us_ = 0;             // shaken: a hard look (composed) or dizzy (playful)
     bool face_down_ = false;                   // lying on her face: eyes shut
     int64_t last_gently_us_ = 0, last_whoa_us_ = 0;
+    int64_t idle_since_us_ = 0;                // channel closed and nothing happening since
 };

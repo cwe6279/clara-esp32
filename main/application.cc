@@ -1454,11 +1454,16 @@ void Application::SendBoardEvent(const std::string& kind, const std::string& tex
     Schedule([this, kind, text]() {
         if (!protocol_) return;
         if (!protocol_->IsAudioChannelOpened()) {
+#if CONFIG_CLARA_MOTION_EVENTS_OPEN
             if (GetDeviceState() != kDeviceStateIdle) return;
             if (!protocol_->OpenAudioChannel()) {
                 ESP_LOGW(TAG, "event %s: could not open the channel", kind.c_str());
                 return;
             }
+#else
+            ESP_LOGI(TAG, "event %s: waiting for the wake word, not sent", kind.c_str());   // she reacted on her own
+            return;
+#endif
         }
         protocol_->SendBoardEvent(kind, text);
     });
