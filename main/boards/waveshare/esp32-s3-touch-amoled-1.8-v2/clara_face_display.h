@@ -8,6 +8,8 @@
 
 #include "display/lcd_display.h"
 #include <atomic>
+#include <functional>
+#include <string_view>
 
 class ClaraFaceDisplay : public SpiLcdDisplay {
 public:
@@ -22,6 +24,9 @@ public:
     void SetTheme(Theme* theme) override;       // the text font arrives with the theme
     void SetFaceFrame(uint32_t packed) override;      // audio task: records, never draws
     void SetPowerSaveMode(bool on) override;          // battery idle: panel asleep, ears stay on
+    // A tap while the panel sleeps on battery: the board hands it to its power-save timer,
+    // which brings the face back and restarts the idle countdown (nothing is bypassed).
+    void OnTouchWake(std::function<void()> cb) { on_touch_wake_ = cb; }
 
 private:
     struct Eye {
@@ -44,6 +49,11 @@ private:
     bool BecameReady();
     static void TouchEvent(lv_event_t* e);
     void OnTouch(lv_event_code_t code, int x, int y);
+    void Tickled(int64_t now);
+    void Say(const std::string_view& clip, int64_t& last_us);
+    void PanelSleep(bool asleep);
+    void GoToSleep();
+    void WakeFromSleep(const char* why);
     void BuildEye(Eye& eye, lv_obj_t* screen, const lv_image_dsc_t* sclera,
                   const lv_image_dsc_t* iris, const lv_image_dsc_t* const* lids,
                   const lv_image_dsc_t* const* emos);
@@ -91,5 +101,11 @@ private:
     float look_x_ = 0, look_y_ = 0;
     int64_t laugh_until_us_ = 0;
     int64_t boop_until_us_ = 0;
+    int64_t last_hm_us_ = 0, last_mmm_us_ = 0, last_giggle_us_ = 0;
+    bool swallow_press_ = false;               // the press that woke her, or put her to sleep
+    bool sleeping_ = false;                    // put to sleep by hand (a long hold)
+    int64_t sleep_at_us_ = 0;
+    bool panel_asleep_ = false;
+    std::function<void()> on_touch_wake_;
     bool drowsy_ = false;                      // lids parted, not yet open
 };

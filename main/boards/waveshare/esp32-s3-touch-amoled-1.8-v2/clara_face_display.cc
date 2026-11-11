@@ -1,6 +1,7 @@
 #include "clara_face_display.h"
 #include "application.h"
 #include "board.h"
+#include "assets/lang_config.h"
 #include "esp_lcd_panel_ops.h"
 #include "lvgl_theme.h"
 
@@ -173,9 +174,23 @@ static const int kTickleTaps = 3;                      // taps within kTickleWin
 static const int kTickleWindowMs = 1500;
 static const int kTickleTravelPx = 120;                // a finger rubbed this far in one press
 static const int kHoldMs = 350;
+static const int kSleepHoldMs = 2000;                  // hold this long: she goes to sleep
 static const int kLaughMs = 2600;
 static const int kBoopMs = 700;                        // wide eyes after a tap
 static const int kLookMs = 1500;
+static const int kSoundGapMs = 8000;                   // a given reaction sound at most this often
+static const bool kComposed = CONFIG_CLARA_TOUCH_COMPOSED;
+
+// A short clip from the board itself, right away, only while idle (in a conversation the
+// host owns the audio and the brain gets the event instead), and not too often.
+void ClaraFaceDisplay::Say(const std::string_view& clip, int64_t& last_us) {
+    int64_t now = esp_timer_get_time();
+    if (now - last_us < (int64_t)kSoundGapMs * 1000) return;
+    auto& app = Application::GetInstance();
+    if (app.GetDeviceState() != kDeviceStateIdle) return;
+    last_us = now;
+    app.Schedule([&app, clip]() { app.PlaySound(clip); });
+}
 
 void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
     auto self = static_cast<ClaraFaceDisplay*>(lv_event_get_user_data(e));
@@ -184,11 +199,31 @@ void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
     self->OnTouch(lv_event_get_code(e), p.x, p.y);
 }
 
+void ClaraFaceDisplay::Tickled(int64_t now) {
+    bool fresh = now >= laugh_until_us_;
+    laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+    if (!fresh) return;
+    if (kComposed) Say(Lang::Sounds::OGG_MMM, last_mmm_us_);   // a patient sigh
+    else Say(Lang::Sounds::OGG_GIGGLE, last_giggle_us_);
+}
+
 void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
-    if (!ready_) return;                               // asleep: not ticklish yet
+    if (!ready_) return;                               // not up yet
     int64_t now = esp_timer_get_time();
     if (code != LV_EVENT_PRESSING) {
         ESP_LOGI(TAG, "touch %s at %d,%d", code == LV_EVENT_PRESSED ? "down" : "up", x, y);
+    }
+    if (sleeping_ || panel_asleep_) {                  // tap to wake; that press does nothing else
+        if (code == LV_EVENT_PRESSED) {
+            swallow_press_ = true;
+            if (sleeping_) WakeFromSleep("tapped");
+            else if (on_touch_wake_) { ESP_LOGI(TAG, "tapped while asleep on battery"); on_touch_wake_(); }
+        }
+        return;
+    }
+    if (swallow_press_) {
+        if (code == LV_EVENT_RELEASED) swallow_press_ = false;
+        return;
     }
     if (code == LV_EVENT_PRESSED) {
         press_start_us_ = now;
@@ -203,17 +238,26 @@ void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
         for (int i = 0; i < kTapHistory; i++) if (tap_us_[i] > window) n++;
         tap_us_[tap_next_++ % kTapHistory] = now;
         if (n + 1 >= kTickleTaps) {
-            laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
-            ESP_LOGI(TAG, "tickled: %d taps", n + 1);
+            if (now >= laugh_until_us_) ESP_LOGI(TAG, "tickled: %d taps", n + 1);
+            Tickled(now);
+        } else {
+            Say(Lang::Sounds::OGG_HM, last_hm_us_);
         }
     } else if (code == LV_EVENT_PRESSING) {
         travel_px_ += abs(x - last_touch_x_) + abs(y - last_touch_y_);
         last_touch_x_ = x; last_touch_y_ = y;
         look_until_us_ = now + (int64_t)kLookMs * 1000;
-        held_ = now - press_start_us_ > (int64_t)kHoldMs * 1000;
+        bool held = now - press_start_us_ > (int64_t)kHoldMs * 1000;
+        if (held && !held_) Say(Lang::Sounds::OGG_MMM, last_mmm_us_);
+        held_ = held;
+        if (now - press_start_us_ > (int64_t)kSleepHoldMs * 1000 && travel_px_ < kTickleTravelPx) {
+            GoToSleep();
+            swallow_press_ = true;
+            return;
+        }
         if (travel_px_ > kTickleTravelPx) {            // rubbed: that tickles
             if (now >= laugh_until_us_) ESP_LOGI(TAG, "tickled: rubbed");
-            laugh_until_us_ = now + (int64_t)kLaughMs * 1000;
+            Tickled(now);
             travel_px_ = 0;
         }
     } else if (code == LV_EVENT_RELEASED) {
@@ -246,28 +290,56 @@ void ClaraFaceDisplay::ApplyGaze(Eye& eye, int dx, int dy) {
     lv_obj_set_pos(eye.iris, eye.iris_x0 + dx, eye.iris_y0 + dy);
 }
 
+// The panel asleep is DISPOFF then SLPIN, which stops the driver's oscillator and charge
+// pumps. Waking is SLPOUT, the driver's 120 ms settle, a full redraw, DISPON. The panel has
+// no reset line, so the driver's deep standby (a 1.3 s re-init on wake) never comes into it.
+void ClaraFaceDisplay::PanelSleep(bool asleep) {
+    if (panel_ == nullptr || asleep == panel_asleep_) return;
+    panel_asleep_ = asleep;
+    if (asleep) {
+        esp_lcd_panel_disp_on_off(panel_, false);
+        esp_lcd_panel_disp_sleep(panel_, true);
+    } else {
+        esp_lcd_panel_disp_sleep(panel_, false);
+        lv_obj_invalidate(lv_screen_active());
+        lv_refr_now(lv_display_get_default());
+        esp_lcd_panel_disp_on_off(panel_, true);
+    }
+}
+
+// Idle on battery (the power-save timer): the face stops and the panel sleeps while the
+// wake word keeps running; the timer shuts the board down later. Waking (the channel
+// opening, or USB) brings the face back, and ends a sleep she was put into by hand too.
 void ClaraFaceDisplay::SetPowerSaveMode(bool on) {
-    // Idle on battery: the face stops and the panel is put to sleep (DISPOFF, then SLPIN,
-    // which stops the driver's oscillator and charge pumps), while the wake word keeps
-    // running; the power-save timer shuts the board down later. Waking is SLPOUT, the
-    // driver's 120 ms settle, a full redraw, DISPON. The panel has no reset line, so the
-    // driver's deep standby (a 1.3 s re-init on wake) never comes into it.
     DisplayLockGuard lock(this);
     if (on) {
         if (face_timer_) lv_timer_pause(face_timer_);
-        if (panel_) {
-            esp_lcd_panel_disp_on_off(panel_, false);
-            esp_lcd_panel_disp_sleep(panel_, true);
-        }
+        PanelSleep(true);
     } else {
-        if (panel_) {
-            esp_lcd_panel_disp_sleep(panel_, false);
-            lv_obj_invalidate(lv_screen_active());
-            lv_refr_now(lv_display_get_default());
-            esp_lcd_panel_disp_on_off(panel_, true);
-        }
+        sleeping_ = false;
+        PanelSleep(false);
         if (face_timer_) lv_timer_resume(face_timer_);
+        blink_step_ = 5;                               // lids open
     }
+}
+
+// A long hold: she closes her eyes and the panel sleeps; the ears stay on. A tap, the
+// wake word, or USB wakes her. LVGL task only.
+void ClaraFaceDisplay::GoToSleep() {
+    if (sleeping_) return;
+    sleeping_ = true;
+    sleep_at_us_ = esp_timer_get_time();
+    held_ = false;
+    laugh_until_us_ = look_until_us_ = boop_until_us_ = 0;
+    ESP_LOGI(TAG, "held: going to sleep");
+}
+
+void ClaraFaceDisplay::WakeFromSleep(const char* why) {
+    if (!sleeping_) return;
+    sleeping_ = false;
+    PanelSleep(false);
+    blink_step_ = 5;                                   // lids open
+    ESP_LOGI(TAG, "awake: %s", why);
 }
 
 // Before the wake word runs (Wi-Fi, the version check, loading the model) she is not
@@ -297,6 +369,20 @@ bool ClaraFaceDisplay::BecameReady() {
 
 void ClaraFaceDisplay::Tick() {
     int64_t now = esp_timer_get_time();
+
+    if (sleeping_) {
+        auto& app = Application::GetInstance();
+        if (app.GetDeviceState() != kDeviceStateIdle) {   // the wake word opened a channel
+            WakeFromSleep("conversation");
+        } else {
+            int lid = (int)((now - sleep_at_us_) / (120 * 1000));   // lids drift shut
+            if (lid > kLidLevels - 1) lid = kLidLevels - 1;
+            ApplyMouth(0);
+            for (auto& eye : eyes_) { ApplyGaze(eye, 0, 0); ApplyLid(eye, lid); }
+            if (lid == kLidLevels - 1 && now - sleep_at_us_ > 900 * 1000) PanelSleep(true);
+            return;
+        }
+    }
 
     if (!ready_ && !BecameReady()) {
         ApplyMouth(0);
@@ -354,21 +440,35 @@ void ClaraFaceDisplay::Tick() {
     }
     bool boop = now < boop_until_us_;
     int laugh_beat = (int)((now / 1000) / 350) % 2;     // a slow ha-ha
-    if (laughing) {
-        lid = laugh_beat ? 3 : 1;                       // eyes crinkle shut and open
-        if (!speaking) ApplyMouth(laugh_beat ? 3 : 2);  // "ah" / "ee"
-    } else if (held_) {
-        lid = 3;                                        // squished: a contented squint
-    } else if (boop) {
-        lid = 0;                                        // wide
+    int edy, emo;
+    if (kComposed) {
+        // Clara: a glance at the finger, patience when held, and when tickled a
+        // half-lidded look with the eyes drifting up: "was there something you needed?"
+        if (laughing) {
+            lid = 2;
+            tx = 0; ty = -0.3f;                          // eyes up
+            gaze_x_ += (tx - gaze_x_) * 0.1f; gaze_y_ += (ty - gaze_y_) * 0.1f;
+        } else if (held_) {
+            lid = 1;                                    // a patient, heavy-lidded look
+        }
+        edy = laughing ? 4 : emotion_dy_.load();
+        emo = laughing ? 3 : emotion_.load();           // the annoyed lid cut
+    } else {
+        if (laughing) {
+            lid = laugh_beat ? 3 : 1;                   // eyes crinkle shut and open
+            if (!speaking) ApplyMouth(laugh_beat ? 3 : 2);  // "ah" / "ee"
+        } else if (held_) {
+            lid = 3;                                    // squished: a contented squint
+        } else if (boop) {
+            lid = 0;                                    // wide
+        }
+        edy = laughing ? (laugh_beat ? -2 : -8) : boop ? -12 : held_ ? -4 : emotion_dy_.load();
+        emo = (laughing || held_) ? 1 : emotion_.load();    // the happy lid cut
     }
-
-    int edy = laughing ? (laugh_beat ? -2 : -8) : boop ? -12 : held_ ? -4 : emotion_dy_.load();
     if (edy != shown_emotion_dy_) {
         shown_emotion_dy_ = edy;
         PlaceEyes();
     }
-    int emo = (laughing || held_) ? 1 : emotion_.load();    // the happy lid cut
     for (auto& eye : eyes_) {
         ApplyGaze(eye, dx, dy);
         ApplyLid(eye, lid);
