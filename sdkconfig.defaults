@@ -86,7 +86,7 @@ CONFIG_STARTUP_WAKE_WORD_HINT=n
 # (MultiNet 7 takes plain English words). Threshold: smaller = more sensitive.
 # CONFIG_USE_AFE_WAKE_WORD is not set
 CONFIG_USE_CUSTOM_WAKE_WORD=y
-CONFIG_CUSTOM_WAKE_WORD="clara"
+CONFIG_CUSTOM_WAKE_WORD="clara;klara;clarra;claira;hey clara;hi clara"
 CONFIG_CUSTOM_WAKE_WORD_DISPLAY="Clara"
 CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=15
 # CONFIG_SR_MN_EN_NONE is not set

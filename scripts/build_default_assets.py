@@ -1063,16 +1063,23 @@ def main():
         language = get_language_from_multinet_models(multinet_model_names)
         
         # Build multinet_model info structure
+        # CONFIG_CUSTOM_WAKE_WORD may hold several phrases separated by ';' (spelling
+        # variants for how people say the name, or a longer "hey <name>" form); each is a
+        # command with the same display text, and any of them wakes the device.
+        phrases = [p.strip() for p in custom_wake_word_config['wake_word'].split(';') if p.strip()]
         multinet_model_info = {
             "language": language,
-            "duration": 3000,  # Default duration in ms
+            # MultiNet cleans its state when this many ms pass without a command; a word
+            # said across that reset is lost, so the window is long rather than 3 s.
+            "duration": 8000,
             "threshold": custom_wake_word_config['threshold'],
             "commands": [
                 {
-                    "command": custom_wake_word_config['wake_word'],
+                    "command": phrase,
                     "text": custom_wake_word_config['display'],
                     "action": "wake"
                 }
+                for phrase in phrases
             ]
         }
         print(f"  custom wake word: {custom_wake_word_config['wake_word']} ({custom_wake_word_config['display']})")
