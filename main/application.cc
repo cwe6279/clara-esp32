@@ -705,6 +705,31 @@ void Application::InitializeProtocol() {
                     display->SetEmotion(emotion_str.c_str());
                 });
             }
+        } else if (strcmp(type->valuestring, "face") == 0) {
+            // {"type":"face","look":"left"|"right"|"up"|"down"|"ahead"|{"x":..,"y":..},"hold_ms":2500}
+            auto look = cJSON_GetObjectItem(root, "look");
+            auto hold = cJSON_GetObjectItem(root, "hold_ms");
+            int hold_ms = cJSON_IsNumber(hold) ? hold->valueint : 2500;
+            float x = 0, y = 0;
+            bool ok = false;
+            if (cJSON_IsString(look)) {
+                const char* d = look->valuestring;
+                ok = true;
+                if (strcmp(d, "left") == 0) x = -1;
+                else if (strcmp(d, "right") == 0) x = 1;
+                else if (strcmp(d, "up") == 0) y = -1;
+                else if (strcmp(d, "down") == 0) y = 1;
+                else if (strcmp(d, "ahead") == 0 || strcmp(d, "center") == 0) {}
+                else ok = false;
+            } else if (cJSON_IsObject(look)) {
+                auto lx = cJSON_GetObjectItem(look, "x"); auto ly = cJSON_GetObjectItem(look, "y");
+                if (cJSON_IsNumber(lx) && cJSON_IsNumber(ly)) { x = lx->valuedouble; y = ly->valuedouble; ok = true; }
+            }
+            if (ok) {
+                Schedule([display, x, y, hold_ms]() { display->SetLook(x, y, hold_ms); });
+            } else {
+                ESP_LOGW(TAG, "face: unknown look");
+            }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
             if (cJSON_IsObject(payload)) {

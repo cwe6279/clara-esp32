@@ -61,6 +61,8 @@ public:
     // A satellite face: three 20 ms mouth shapes and an emotion riding on the audio frame
     // that is starting to play now. See boards/waveshare/.../clara_face_display.h.
     virtual void SetFaceFrame(uint32_t packed) {}
+    // Point the gaze: x and y in -1..1 (viewer's left/up negative), held for hold_ms.
+    virtual void SetLook(float x, float y, int hold_ms) {}
     virtual void SetEmojiCollection(std::shared_ptr<EmojiCollection>) {}
     virtual void SetupUI() { setup_ui_called_ = true; }
     virtual bool IsMonochrome() const { return false; }

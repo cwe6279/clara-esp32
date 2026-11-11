@@ -24,6 +24,7 @@ public:
     void SetTheme(Theme* theme) override;       // the text font arrives with the theme
     void SetFaceFrame(uint32_t packed) override;      // audio task: records, never draws
     void SetPowerSaveMode(bool on) override;          // battery idle: panel asleep, ears stay on
+    void SetLook(float x, float y, int hold_ms) override;   // the host points her gaze
     // A tap while the panel sleeps on battery: the board hands it to its power-save timer,
     // which brings the face back and restarts the idle countdown (nothing is bypassed).
     void OnTouchWake(std::function<void()> cb) { on_touch_wake_ = cb; }
@@ -84,6 +85,10 @@ private:
     std::atomic<int> emotion_dy_{0};
     int shown_emotion_dy_ = 0;
     std::atomic<int> emotion_{0};              // index into the lid-cut table
+
+    // a look the host asked for (any task): where, and until when
+    std::atomic<float> cmd_look_x_{0}, cmd_look_y_{0};
+    std::atomic<int64_t> cmd_look_until_us_{0};
 
     // Eyes closed from power-on until the wake word is listening; then they open once.
     bool ready_ = false;

@@ -462,8 +462,10 @@ void ClaraFaceDisplay::Tick() {
     }
     bool laughing = now < laugh_until_us_;
     bool looking = now < look_until_us_;
-    float tx = looking ? look_x_ : target_x_;
-    float ty = looking ? look_y_ : target_y_;
+    bool told = now < cmd_look_until_us_.load();       // the host said where to look
+    float tx = looking ? look_x_ : told ? cmd_look_x_.load() : target_x_;
+    float ty = looking ? look_y_ : told ? cmd_look_y_.load() : target_y_;
+    looking = looking || told;
     gaze_x_ += (tx - gaze_x_) * (looking ? 0.3f : 0.12f);
     gaze_y_ += (ty - gaze_y_) * (looking ? 0.3f : 0.12f);
     int dx = (int)lroundf(gaze_x_ * kEyeSize * 0.5f);
@@ -531,6 +533,15 @@ void ClaraFaceDisplay::Tick() {
 }
 
 // ── events from the rest of the firmware ─────────────────────────────────────
+void ClaraFaceDisplay::SetLook(float x, float y, int hold_ms) {
+    x = x < -1 ? -1 : x > 1 ? 1 : x;
+    y = y < -1 ? -1 : y > 1 ? 1 : y;
+    cmd_look_x_.store(x * 0.45f);                     // fractions of the eye radius, as the touch look
+    cmd_look_y_.store(y * 0.30f);
+    cmd_look_until_us_.store(esp_timer_get_time() + (int64_t)hold_ms * 1000);
+    ESP_LOGI(TAG, "look %.1f,%.1f for %d ms", x, y, hold_ms);
+}
+
 bool ClaraFaceDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return false;
     int dy = 0, emo = 0;
