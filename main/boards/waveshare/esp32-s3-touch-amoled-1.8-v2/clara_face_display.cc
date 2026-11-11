@@ -231,8 +231,9 @@ void ClaraFaceDisplay::OnTouch(lv_event_code_t code, int x, int y) {
         press_start_us_ = now;
         travel_px_ = 0;
         last_touch_x_ = x; last_touch_y_ = y;
-        // a tap: eyes wide, then a look at your finger
-        boop_until_us_ = now + (int64_t)kBoopMs * 1000;
+        // a tap: eyes wide (playful) or a blink (composed), then a look at your finger
+        if (kComposed) { if (blink_step_ < 0) blink_step_ = 0; }
+        else boop_until_us_ = now + (int64_t)kBoopMs * 1000;
         look_until_us_ = now + (int64_t)kLookMs * 1000;
         // taps in a row
         int64_t window = now - (int64_t)kTickleWindowMs * 1000;
@@ -334,6 +335,8 @@ void ClaraFaceDisplay::GoToSleep() {
     if (sleeping_) return;
     sleeping_ = true;
     sleep_at_us_ = esp_timer_get_time();
+    sleep_idle_seen_ = false;
+    last_hush_us_ = 0;
     held_ = false;
     laugh_until_us_ = look_until_us_ = boop_until_us_ = 0;
     ESP_LOGI(TAG, "held: going to sleep");
@@ -377,8 +380,20 @@ void ClaraFaceDisplay::Tick() {
 
     if (sleeping_) {
         auto& app = Application::GetInstance();
-        if (app.GetDeviceState() != kDeviceStateIdle) {   // the wake word opened a channel
+        auto state = app.GetDeviceState();
+        if (state == kDeviceStateIdle) {
+            sleep_idle_seen_ = true;
+        } else if (sleep_idle_seen_) {                 // asleep, and the wake word opened a channel
             WakeFromSleep("conversation");
+        } else if (now - last_hush_us_ > 500 * 1000) { // put to sleep mid-conversation: end it
+            last_hush_us_ = now;
+            if (state == kDeviceStateListening || state == kDeviceStateSpeaking) {
+                ESP_LOGI(TAG, "asleep: ending the conversation");
+                app.ToggleChatState();                 // speaking: stops her; listening: closes the channel
+            }
+        }
+        if (!sleeping_) {
+            // woken just now
         } else {
             int lid = (int)((now - sleep_at_us_) / (120 * 1000));   // lids drift shut
             if (lid > kLidLevels - 1) lid = kLidLevels - 1;

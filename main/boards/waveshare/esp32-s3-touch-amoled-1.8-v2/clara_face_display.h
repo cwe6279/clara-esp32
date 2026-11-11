@@ -105,6 +105,8 @@ private:
     bool swallow_press_ = false;               // the press that woke her, or put her to sleep
     bool sleeping_ = false;                    // put to sleep by hand (a long hold)
     int64_t sleep_at_us_ = 0;
+    bool sleep_idle_seen_ = false;             // the conversation she was in has ended
+    int64_t last_hush_us_ = 0;
     bool panel_asleep_ = false;
     std::function<void()> on_touch_wake_;
     bool drowsy_ = false;                      // lids parted, not yet open
