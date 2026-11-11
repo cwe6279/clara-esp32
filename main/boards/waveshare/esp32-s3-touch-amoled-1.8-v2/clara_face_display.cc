@@ -183,13 +183,32 @@ static const bool kComposed = CONFIG_CLARA_TOUCH_COMPOSED;
 
 // A short clip from the board itself, right away, only while idle (in a conversation the
 // host owns the audio and the brain gets the event instead), and not too often.
+// The wake word is paused while the clip plays: the mic hears her own voice, and the
+// first time she said "let's keep it professional" the detector took it for her name and
+// opened a channel.
+static const int kClipMuteMs = 3500;
+
 void ClaraFaceDisplay::Say(const std::string_view& clip, int64_t& last_us) {
     int64_t now = esp_timer_get_time();
     if (now - last_us < (int64_t)kSoundGapMs * 1000) return;
     auto& app = Application::GetInstance();
     if (app.GetDeviceState() != kDeviceStateIdle) return;
     last_us = now;
-    app.Schedule([&app, clip]() { app.PlaySound(clip); });
+    ears_back_at_us_ = now + (int64_t)kClipMuteMs * 1000;
+    app.Schedule([&app, clip]() {
+        app.GetAudioService().EnableWakeWordDetection(false);
+        app.PlaySound(clip);
+    });
+}
+
+// Called each tick: once the clip is over, the ears come back (if she is still idle).
+void ClaraFaceDisplay::EarsBack(int64_t now) {
+    if (ears_back_at_us_ == 0 || now < ears_back_at_us_) return;
+    ears_back_at_us_ = 0;
+    auto& app = Application::GetInstance();
+    app.Schedule([&app]() {
+        if (app.GetDeviceState() == kDeviceStateIdle) app.GetAudioService().EnableWakeWordDetection(true);
+    });
 }
 
 void ClaraFaceDisplay::TouchEvent(lv_event_t* e) {
@@ -379,6 +398,7 @@ bool ClaraFaceDisplay::BecameReady() {
 
 void ClaraFaceDisplay::Tick() {
     int64_t now = esp_timer_get_time();
+    EarsBack(now);
 
     if (sleeping_) {
         auto& app = Application::GetInstance();

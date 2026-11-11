@@ -51,6 +51,7 @@ private:
     void OnTouch(lv_event_code_t code, int x, int y);
     void Tickled(int64_t now);
     void Say(const std::string_view& clip, int64_t& last_us);
+    void EarsBack(int64_t now);
     void PanelSleep(bool asleep);
     void GoToSleep();
     void WakeFromSleep(const char* why);
@@ -102,6 +103,7 @@ private:
     int64_t laugh_until_us_ = 0;
     int64_t boop_until_us_ = 0;
     int64_t last_hm_us_ = 0, last_mmm_us_ = 0, last_giggle_us_ = 0, last_professional_us_ = 0;
+    int64_t ears_back_at_us_ = 0;              // wake word paused while a clip plays
     bool swallow_press_ = false;               // the press that woke her, or put her to sleep
     bool sleeping_ = false;                    // put to sleep by hand (a long hold)
     int64_t sleep_at_us_ = 0;
