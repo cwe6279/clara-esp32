@@ -142,7 +142,7 @@ In `sdkconfig.defaults` (all under "Clara face" in `menuconfig`):
 
 | Option | Default | What |
 | --- | --- | --- |
-| `CONFIG_OTA_URL` | `http://192.168.68.79:8030/xiaozhi/ota/` | the talker host; the board asks it for the WebSocket address at boot |
+| `CONFIG_OTA_URL` | `http://talker-host.local:8030/xiaozhi/ota/` | the talker host: set it to your host's address (the board asks it for the WebSocket address at boot) |
 | `CONFIG_CLARA_LISTEN_SETTLE_MS` | 15000 | mic open to eyes open at start-up (the lids part two thirds of the way in) |
 | `CONFIG_CLARA_SLEEP_SECONDS` | 60 | idle on battery before the panel sleeps (ears stay on) |
 | `CONFIG_CLARA_SHUTDOWN_SECONDS` | 240 | idle on battery before the board powers off; -1 never |

@@ -78,7 +78,7 @@ CONFIG_LV_BUILD_EXAMPLES=n
 CONFIG_LV_BUILD_DEMOS=n
 
 # Clara satellite server on the desktop (talker: voice_loop.py --satellite)
-CONFIG_OTA_URL="http://192.168.68.79:8030/xiaozhi/ota/"
+CONFIG_OTA_URL="http://talker-host.local:8030/xiaozhi/ota/"
 # Clara: only the BOOT button interrupts her, not a noise that sounds like the wake word
 CONFIG_WAKE_WORD_WHILE_SPEAKING=n
 CONFIG_STARTUP_WAKE_WORD_HINT=n
