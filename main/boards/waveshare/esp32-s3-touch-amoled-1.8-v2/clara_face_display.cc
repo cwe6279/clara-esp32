@@ -343,10 +343,10 @@ void ClaraFaceDisplay::SetPowerSaveMode(bool on) {
         if (face_timer_) lv_timer_pause(face_timer_);
         PanelSleep(true);
     } else {
-        sleeping_ = false;
         PanelSleep(false);
         if (face_timer_) lv_timer_resume(face_timer_);
-        blink_step_ = 5;                               // lids open
+        if (sleeping_) WakeFromSleep("power");         // brings the mouth and status bar back too
+        else blink_step_ = 5;                          // lids open
     }
 }
 
