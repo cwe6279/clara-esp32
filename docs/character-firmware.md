@@ -5,7 +5,8 @@ small ESP32-S3 board with a screen, a mic and a speaker into a character's ears,
 The board does the edge of the loop: wake word, audio in and out, a face that blinks, looks
 around, moves its lips to the voice, reacts to touch and sleeps on battery. Everything that
 thinks runs on a host computer (the [talker](https://github.com/cwe6279/animation) voice loop with
-`--satellite`), which the board reaches over Wi-Fi.
+`--satellite`: a desktop, or a headless Raspberry Pi Zero 2 W as the permanent host), which the
+board reaches over Wi-Fi.
 
 Clara is the first character. This guide is for making the second: a different face, voice,
 name, temperament and timings, on the same code. It assumes you have never seen the talker
@@ -219,7 +220,7 @@ protocol (`docs/websocket.md`):
   tilted, face down, face up, upside down), then nothing of that kind for
   `CONFIG_CLARA_MOTION_COOLDOWN_S`. The host makes it an event prompt for the character and
   drops it if she is busy. `CONFIG_CLARA_MOTION_EVENTS=n` keeps the reactions local.
-- The host closes the channel 40 s after the last reply; that is when the board's idle starts.
+- The host closes the channel 30 s after the last reply; that is when the board's idle starts.
 
 Three timing rules the board imposes, each learned the hard way: pace the audio (the board
 keeps about 1.2 s and drops the rest), hold the first frames 150 ms after `tts start`, and mute
