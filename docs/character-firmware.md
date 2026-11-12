@@ -38,6 +38,10 @@ different `sdkconfig.defaults`.
 - A character in talker's format: a folder under `faces/` with `face.json`, six mouth PNGs and a
   textured eye (`eye/iris.png`, `lid-upper.png`, `lid-lower.png`, optionally `sclera.png`,
   `pupilMap.png`, `highlight.png`). Clara's `faces/clara/` is the reference.
+- Not needed for a basic character: an agent server. Tasks ("find me a recipe and text me the
+  link") go from the host to a separate agent harness (talker's `tools/AGENT_RELAY.md`). A
+  character that talks, remembers and reacts runs without one; add it once the board and the
+  host are working.
 
 ## 1. The face
 
