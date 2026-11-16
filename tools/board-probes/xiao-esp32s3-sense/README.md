@@ -99,3 +99,23 @@ quarter of that power) or feed VIN from 3V3.
 The speaker chosen is a 50 mm full-range driver, 8 ohm, 3 W: above anything this amplifier can
 deliver into 8 ohm, so VIN at 5 V and full scale are safe. A bare driver sounds thin; a small
 closed box or even a baffle around it gives the voice its low end.
+
+## Monitoring mode (design, not built)
+
+For a watching job rather than conversation (noticing someone arrive, minding a room), the
+board itself decides when a picture is worth sending. For the assistant, looks stay on demand.
+
+1. The camera keeps running at 1600 x 1200. A couple of times a second the board decodes one
+   frame at 1/8 scale (esp32-camera's JPEG decoder) and reduces it to a 32 x 24 grey grid.
+2. It compares that grid with the one from the last picture sent. The talker's host-side gate
+   gives the scale: a still room about 1 %, a raised hand 4 to 8 %, a person walking in 10 %+.
+3. Past the threshold it sends a full picture, with three guards:
+   - **Settle first:** wait until the movement has stopped for about 0.5 s, so the picture is
+     not blurred mid-move.
+   - **Minimum gap:** about 10 s between pictures, so a busy scene cannot trigger a stream.
+   - **Patterns, not brightness:** normalise each grid's brightness and contrast before
+     comparing, so a lamp or an exposure change does not count.
+
+Cost: a few percent of one core and almost no memory; nothing crosses Wi-Fi and no model is
+called until there is a picture. The threshold needs one tuning session on the board in the
+room where it will sit: walk in, sit down, hold something up, leave, and read the scores.
