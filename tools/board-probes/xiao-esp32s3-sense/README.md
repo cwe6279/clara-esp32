@@ -95,3 +95,7 @@ and D8 to D10 belong to the microSD slot. The speaker goes across the amplifier'
 outputs, never to ground. From 5 V the amplifier gives up to about 3 W into 4 ohm and 1.4 W
 into 8 ohm at full scale; for a small speaker keep the level at -6 dBFS or below (about a
 quarter of that power) or feed VIN from 3V3.
+
+The speaker chosen is a 50 mm full-range driver, 8 ohm, 3 W: above anything this amplifier can
+deliver into 8 ohm, so VIN at 5 V and full scale are safe. A bare driver sounds thin; a small
+closed box or even a baffle around it gives the voice its low end.
