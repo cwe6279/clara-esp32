@@ -269,6 +269,10 @@ the constants at the top of the file.
   header H2 is the real fix. The mic is quiet and clean; whispers need the host's satellite
   defaults.
 
+- Other boards: a headless candidate, the Seeed XIAO ESP32S3 Sense (camera and mic, no
+  display or speaker), has its probes, camera numbers and mic calibration in
+  `tools/board-probes/xiao-esp32s3-sense/`. No board class yet.
+
 ## 9. Toward its own project
 
 The fork is already two things: a board port and a character engine. When this becomes its
