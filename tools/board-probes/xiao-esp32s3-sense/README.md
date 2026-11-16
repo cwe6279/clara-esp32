@@ -119,3 +119,23 @@ board itself decides when a picture is worth sending. For the assistant, looks s
 Cost: a few percent of one core and almost no memory; nothing crosses Wi-Fi and no model is
 called until there is a picture. The threshold needs one tuning session on the board in the
 room where it will sit: walk in, sit down, hold something up, leave, and read the scores.
+
+## Wake word on 8 MB: phonemes
+
+The headless 8 MB layout packages `mn5q8_en`, which only accepts commands written as its
+phoneme letters (plain English is rejected: `MN_COMMAND: invalid command`). `mn6_en`/`mn7_en`
+convert text on the board with a g2p library, which is also why their app is about 0.5 MB
+larger. Convert phrases with esp-sr's `tool/multinet_g2p.py` (needs `g2p_en`):
+
+| Phrase | mn5 phonemes |
+|---|---|
+| clara | `KLaRc` |
+| klara | `KLnRc` |
+| hey clara | `hd KLaRc` |
+| hi clara | `hi KLaRc` |
+| take a photo | `TdK c FbTb` |
+| scan this | `SKaN jgS` |
+| start recording | `STnRT RcKeRDgl` |
+| stop recording | `STnP RcKeRDgl` |
+
+So for this board: `CONFIG_CUSTOM_WAKE_WORD="KLaRc;KLnRc;hd KLaRc;hi KLaRc"`.
