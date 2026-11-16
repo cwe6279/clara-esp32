@@ -5,6 +5,7 @@
 #include <img_converters.h>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 
 #include "board.h"
 #include "display.h"
@@ -220,6 +221,31 @@ std::expected<std::string, std::string> Esp32Camera::Explain(const std::string& 
                 JpegChunk chunk = {.data = nullptr, .len = 0};
                 xQueueSend(jpeg_queue, &chunk, portMAX_DELAY);
                 return;
+        }
+
+        // Already JPEG (the sensor encoded it): send the frame as it is, in chunks. The
+        // converter below does not pass JPEG through, and the upload failed with
+        // "Failed to encode image to JPEG".
+        if (current_fb_->format == PIXFORMAT_JPEG) {
+            const size_t kChunk = 16 * 1024;
+            bool sent_all = true;
+            for (size_t off = 0; off < current_fb_->len; off += kChunk) {
+                size_t n = std::min(kChunk, current_fb_->len - off);
+                JpegChunk chunk = {.data = (uint8_t*)heap_caps_aligned_alloc(16, n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
+                                   .len = n};
+                if (chunk.data == nullptr) {
+                    ESP_LOGE(TAG, "Failed to allocate %zu bytes for JPEG chunk", n);
+                    sent_all = false;
+                    break;
+                }
+                memcpy(chunk.data, current_fb_->buf + off, n);
+                xQueueSend(jpeg_queue, &chunk, portMAX_DELAY);
+            }
+            (void)sent_all;
+            JpegChunk end = {.data = nullptr, .len = 0};
+            xQueueSend(jpeg_queue, &end, portMAX_DELAY);
+            ESP_LOGI(TAG, "JPEG frame sent as captured: %zu bytes", current_fb_->len);
+            return;
         }
 
         // Use encode buffer for RGB565, otherwise use original frame buffer

@@ -1065,8 +1065,13 @@ def main():
         # Build multinet_model info structure
         # CONFIG_CUSTOM_WAKE_WORD may hold several phrases separated by ';' (spelling
         # variants for how people say the name, or a longer "hey <name>" form); each is a
-        # command with the same display text, and any of them wakes the device.
+        # command with the same display text, and any of them wakes the device. A phrase
+        # written "phrase=label" carries its own label instead: the device still wakes, and
+        # reports the label to the server (e.g. "TdK c FbTb=take a photo" for a voice command).
         phrases = [p.strip() for p in custom_wake_word_config['wake_word'].split(';') if p.strip()]
+        def _split_label(phrase):
+            command, sep, label = phrase.partition('=')
+            return (command.strip(), label.strip()) if sep and label.strip() else (phrase, custom_wake_word_config['display'])
         multinet_model_info = {
             "language": language,
             # MultiNet cleans its state when this many ms pass without a command; a word
@@ -1075,8 +1080,8 @@ def main():
             "threshold": custom_wake_word_config['threshold'],
             "commands": [
                 {
-                    "command": phrase,
-                    "text": custom_wake_word_config['display'],
+                    "command": _split_label(phrase)[0],
+                    "text": _split_label(phrase)[1],
                     "action": "wake"
                 }
                 for phrase in phrases
