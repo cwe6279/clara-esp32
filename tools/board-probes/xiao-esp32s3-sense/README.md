@@ -11,6 +11,7 @@ Back up the factory image first (`esptool read-flash 0 0x800000 stock.bin`).
 | `photo` | Takes one full-resolution JPEG at each reset and prints it as base64 over USB |
 | `video` | Streams JPEG frames over USB; `viewer.py` shows them at http://127.0.0.1:8099/ with size buttons |
 | `mic`   | Streams the microphone over USB after a 100 Hz high-pass and a fixed gain; `record.py` runs a cued far / medium / close test |
+| `speaker` | MAX98357A bring-up: a chime, then 440 Hz at -30, -20, -12 and -6 dBFS; then plays audio sent over USB (`play.py clip.wav`) |
 
 ## What the board has (measured 2026-11-16)
 
@@ -74,3 +75,23 @@ Next, one piece at a time: settle the gain (27 dB, or 30 dB with a limiter); the
 automatic gain capped at about +10 dB for far speech, slow-moving and held during silence.
 Echo cancellation and interference come once the board has a speaker; the automatic gain must
 then sit after echo cancellation.
+
+## Speaker: MAX98357A (wiring planned, not yet tested)
+
+The board has no sound output, so speech goes out through a MAX98357A I2S class-D amplifier.
+The firmware already drives this pairing (PDM mic plus I2S amplifier, `NoAudioCodecSimplexPdm`).
+
+| MAX98357A | XIAO pin | GPIO |
+|---|---|---|
+| BCLK | D0 | 1 |
+| LRC | D1 | 2 |
+| DIN | D3 | 4 |
+| VIN | 5V | - |
+| GND | GND | - |
+| SD, GAIN | not connected (mono mix of left and right, 9 dB gain) | - |
+
+D2 (GPIO3) is skipped because it is a strapping pin; D4/D5 stay free for I2C, D6/D7 for serial,
+and D8 to D10 belong to the microSD slot. The speaker goes across the amplifier's + and -
+outputs, never to ground. From 5 V the amplifier gives up to about 3 W into 4 ohm and 1.4 W
+into 8 ohm at full scale; for a small speaker keep the level at -6 dBFS or below (about a
+quarter of that power) or feed VIN from 3V3.
