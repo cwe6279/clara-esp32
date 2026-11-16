@@ -28,4 +28,26 @@
 #define BUILTIN_LED_GPIO        GPIO_NUM_21   // user LED, lit when low (shared with microSD CS)
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 
+// OV3660 on the Sense board (esp32-camera). 1600x1200 JPEG: the full 4:3 view of the sensor,
+// judged clearly better than 1280x720 for describing a scene (see the board-probes README).
+#define CAMERA_PIN_PWDN   GPIO_NUM_NC
+#define CAMERA_PIN_RESET  GPIO_NUM_NC
+#define CAMERA_PIN_XCLK   GPIO_NUM_10
+#define CAMERA_PIN_SIOD   GPIO_NUM_40
+#define CAMERA_PIN_SIOC   GPIO_NUM_39
+#define CAMERA_PIN_D7     GPIO_NUM_48
+#define CAMERA_PIN_D6     GPIO_NUM_11
+#define CAMERA_PIN_D5     GPIO_NUM_12
+#define CAMERA_PIN_D4     GPIO_NUM_14
+#define CAMERA_PIN_D3     GPIO_NUM_16
+#define CAMERA_PIN_D2     GPIO_NUM_18
+#define CAMERA_PIN_D1     GPIO_NUM_17
+#define CAMERA_PIN_D0     GPIO_NUM_15
+#define CAMERA_PIN_VSYNC  GPIO_NUM_38
+#define CAMERA_PIN_HREF   GPIO_NUM_47
+#define CAMERA_PIN_PCLK   GPIO_NUM_13
+#define CAMERA_XCLK_HZ    20000000
+#define CAMERA_FRAME_SIZE FRAMESIZE_UXGA     // 1600x1200
+#define CAMERA_JPEG_QUALITY 12
+
 #endif  // _BOARD_CONFIG_H_

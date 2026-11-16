@@ -1,12 +1,13 @@
 // Seeed XIAO ESP32S3 Sense as a headless character: hears through the Sense board's PDM mic,
-// speaks through a MAX98357A, shows its state on the user LED, no display. The camera is a
-// later step (see tools/board-probes/xiao-esp32s3-sense/README.md).
+// speaks through a MAX98357A, sees through the OV3660 (photos on request, uploaded to the host),
+// shows its state on the user LED, no display. See tools/board-probes/xiao-esp32s3-sense/README.md.
 #include "wifi_board.h"
 #include "codecs/no_audio_codec.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
 #include "led/gpio_led.h"
+#include "esp32_camera.h"
 
 #include <cmath>
 #include <cstring>
@@ -79,6 +80,38 @@ private:
 class XiaoEsp32S3Sense : public WifiBoard {
 private:
     Button boot_button_;
+    Esp32Camera* camera_ = nullptr;
+
+    void InitializeCamera() {
+        camera_config_t config = {};
+        config.pin_d0 = CAMERA_PIN_D0;
+        config.pin_d1 = CAMERA_PIN_D1;
+        config.pin_d2 = CAMERA_PIN_D2;
+        config.pin_d3 = CAMERA_PIN_D3;
+        config.pin_d4 = CAMERA_PIN_D4;
+        config.pin_d5 = CAMERA_PIN_D5;
+        config.pin_d6 = CAMERA_PIN_D6;
+        config.pin_d7 = CAMERA_PIN_D7;
+        config.pin_xclk = CAMERA_PIN_XCLK;
+        config.pin_pclk = CAMERA_PIN_PCLK;
+        config.pin_vsync = CAMERA_PIN_VSYNC;
+        config.pin_href = CAMERA_PIN_HREF;
+        config.pin_sccb_sda = CAMERA_PIN_SIOD;
+        config.pin_sccb_scl = CAMERA_PIN_SIOC;
+        config.sccb_i2c_port = 1;
+        config.pin_pwdn = CAMERA_PIN_PWDN;
+        config.pin_reset = CAMERA_PIN_RESET;
+        config.xclk_freq_hz = CAMERA_XCLK_HZ;
+        config.ledc_timer = LEDC_TIMER_2;          // the LED uses its own LEDC timer and channel
+        config.ledc_channel = LEDC_CHANNEL_2;
+        config.pixel_format = PIXFORMAT_JPEG;      // the sensor encodes; nothing to re-encode here
+        config.frame_size = CAMERA_FRAME_SIZE;
+        config.jpeg_quality = CAMERA_JPEG_QUALITY;
+        config.fb_count = 1;                       // one buffer: the camera rests between photos
+        config.fb_location = CAMERA_FB_IN_PSRAM;
+        config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+        camera_ = new Esp32Camera(config);
+    }
 
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
@@ -94,6 +127,11 @@ private:
 public:
     XiaoEsp32S3Sense() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeButtons();
+        InitializeCamera();
+    }
+
+    Camera* GetCamera() override {
+        return camera_;
     }
 
     Led* GetLed() override {
