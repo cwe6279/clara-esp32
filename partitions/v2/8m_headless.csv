@@ -1,0 +1,7 @@
+# 8 MB, headless boards: two 2.6 MB app slots and 2.6 MB of assets (mn5q8_en fits, mn7_en does not)
+nvs,      data, nvs,     0x9000,    0x4000,
+otadata,  data, ota,     0xd000,    0x2000,
+phy_init, data, phy,     0xf000,    0x1000,
+ota_0,    app,  ota_0,   0x20000,   0x2a0000,
+ota_1,    app,  ota_1,   ,          0x2a0000,
+assets,   data, spiffs,  ,          0x2a0000,

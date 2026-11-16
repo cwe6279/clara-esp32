@@ -1,0 +1,16 @@
+{
+    "manufacturer": "seeed",
+    "type": "xiao-esp32s3-sense",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "xiao-esp32s3-sense",
+            "sdkconfig_append": [
+                "CONFIG_SPIRAM_MODE_OCT=y",
+                "CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y",
+                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/8m_headless.csv\"",
+                "CONFIG_SR_MN_EN_MULTINET5_SINGLE_RECOGNITION_QUANT8=y"
+            ]
+        }
+    ]
+}

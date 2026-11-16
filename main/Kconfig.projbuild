@@ -193,6 +193,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_CYBERAI_VOCAT_V2_1
         bool "Cyberai-Vocat-V2.1"
         depends on IDF_TARGET_ESP32S3
+    config BOARD_TYPE_XIAO_ESP32S3_SENSE
+        bool "Seeed XIAO ESP32S3 Sense (headless: PDM mic + MAX98357A)"
+        depends on IDF_TARGET_ESP32S3
     config BOARD_TYPE_DF_S3_AI_CAM
         bool "DFRobot ESP32-S3 AI Camera Module"
         depends on IDF_TARGET_ESP32S3
