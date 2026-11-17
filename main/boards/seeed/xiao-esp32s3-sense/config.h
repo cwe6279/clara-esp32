@@ -47,7 +47,10 @@
 #define CAMERA_PIN_HREF   GPIO_NUM_47
 #define CAMERA_PIN_PCLK   GPIO_NUM_13
 #define CAMERA_XCLK_HZ    20000000
-#define CAMERA_FRAME_SIZE FRAMESIZE_UXGA     // 1600x1200
+#define CAMERA_FRAME_SIZE FRAMESIZE_QXGA     // 2048x1536, the sensor's full size: scans are cut into
+                                             // halves on the host so small text keeps its detail
 #define CAMERA_JPEG_QUALITY 12
+
+#define CAMERA_BEST_OF      3                 // fresh frames per photo; the sharpest (largest JPEG) is kept
 
 #endif  // _BOARD_CONFIG_H_

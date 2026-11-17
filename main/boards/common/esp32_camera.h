@@ -19,7 +19,7 @@ struct JpegChunk {
 };
 
 class Esp32Camera : public Camera {
-private:
+protected:   // protected: a board can choose its own frame (e.g. the sharpest of a few)
     bool streaming_on_ = false;
     bool swap_bytes_enabled_ = true;  // Swap pixel byte order for RGB565, enabled by default
     std::string explain_url_;

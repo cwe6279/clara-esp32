@@ -166,13 +166,48 @@ class XiaoSenseCamera : public Esp32Camera {
 public:
     XiaoSenseCamera(const camera_config_t& config, XiaoSenseLed* led) : Esp32Camera(config), led_(led) {}
 
+    // The sharpest of a few fresh frames. At one JPEG quality a blurred frame (a hand moving,
+    // the board settling) compresses smaller, so the largest of CAMERA_BEST_OF is the sharpest.
+    // Two frame buffers: one holds the best so far while the other takes the next; with the
+    // grab-when-empty mode the camera then rests between photos.
     bool Capture() override {
-        // The click and flash come AFTER the frame is in: capture first drops a stale frame and
-        // waits for a fresh exposure (long in dim light), and a click at the start told people
-        // the photo was taken while the shutter was still open, so they moved and it blurred.
-        bool ok = Esp32Camera::Capture();
-        if (ok && led_) led_->Shutter();
-        return ok;
+        if (encoder_thread_.joinable()) {
+            encoder_thread_.join();
+        }
+        if (!streaming_on_) {
+            return false;
+        }
+        if (current_fb_) {
+            esp_camera_fb_return(current_fb_);
+            current_fb_ = nullptr;
+        }
+        for (int i = 0; i < 2; i++) {                       // both buffers hold old frames: drop them
+            if (camera_fb_t* stale = esp_camera_fb_get()) esp_camera_fb_return(stale);
+        }
+        camera_fb_t* best = esp_camera_fb_get();
+        if (!best) {
+            ESP_LOGE(TAG, "camera capture failed");
+            return false;
+        }
+        size_t sizes[CAMERA_BEST_OF] = {best->len};
+        for (int i = 1; i < CAMERA_BEST_OF; i++) {
+            camera_fb_t* next = esp_camera_fb_get();
+            if (!next) break;
+            sizes[i] = next->len;
+            if (next->len > best->len) {
+                esp_camera_fb_return(best);
+                best = next;
+            } else {
+                esp_camera_fb_return(next);
+            }
+        }
+        current_fb_ = best;
+        ESP_LOGI(TAG, "photo %ux%u: kept %u bytes of %u / %u / %u", best->width, best->height,
+                 (unsigned)best->len, (unsigned)sizes[0], (unsigned)sizes[1], (unsigned)sizes[2]);
+        // The click and flash come AFTER the frame is in: a click at the start told people the
+        // photo was taken while the shutter was still open, so they moved and it blurred.
+        if (led_) led_->Shutter();
+        return true;
     }
 
     std::expected<std::string, std::string> Explain(const std::string& question) override {
@@ -220,7 +255,7 @@ private:
         config.pixel_format = PIXFORMAT_JPEG;      // the sensor encodes; nothing to re-encode here
         config.frame_size = CAMERA_FRAME_SIZE;
         config.jpeg_quality = CAMERA_JPEG_QUALITY;
-        config.fb_count = 1;                       // one buffer: the camera rests between photos
+        config.fb_count = 2;                       // two: one keeps the best frame, one takes the next
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
         camera_ = new XiaoSenseCamera(config, SenseLed());
@@ -230,6 +265,10 @@ private:
             int was = sensor->status.hmirror;
             sensor->set_hmirror(sensor, was ? 0 : 1);
             ESP_LOGI(TAG, "camera: mirror %d -> %d", was, was ? 0 : 1);
+            // Dim rooms: let the sensor raise its gain further and not stretch the exposure
+            // (night mode), so a photo is grainier but not smeared by a moving hand.
+            sensor->set_gainceiling(sensor, GAINCEILING_64X);
+            sensor->set_aec2(sensor, 0);
         }
     }
 
