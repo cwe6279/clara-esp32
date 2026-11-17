@@ -224,6 +224,13 @@ private:
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
         camera_ = new XiaoSenseCamera(config, SenseLed());
+        // The OV3660 on the Sense board comes up mirrored left to right (a label read backwards
+        // and the vision model could not read text): flip it, whatever the driver's default was.
+        if (sensor_t* sensor = esp_camera_sensor_get()) {
+            int was = sensor->status.hmirror;
+            sensor->set_hmirror(sensor, was ? 0 : 1);
+            ESP_LOGI(TAG, "camera: mirror %d -> %d", was, was ? 0 : 1);
+        }
     }
 
     void InitializeButtons() {
