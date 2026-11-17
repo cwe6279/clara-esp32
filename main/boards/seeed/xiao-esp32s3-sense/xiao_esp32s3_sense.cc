@@ -77,6 +77,21 @@ private:
     float x1_ = 0, x2_ = 0, y1_ = 0, y2_ = 0;
 };
 
+// Status sounds (tools/status-sounds, embedded from assets/common/status_*.ogg): short original
+// droid chirps that finish before listening opens, never during a voice note.
+#define STATUS_SOUND(name) \
+    extern const char status_##name##_start[] asm("_binary_status_" #name "_ogg_start"); \
+    extern const char status_##name##_end[] asm("_binary_status_" #name "_ogg_end");
+STATUS_SOUND(wake)
+STATUS_SOUND(connected)
+STATUS_SOUND(shutter)
+STATUS_SOUND(listening_ends)
+
+static void PlayStatus(const char* start, const char* end) {
+    Application::GetInstance().GetAudioService().PlaySound(std::string_view(start, end - start));
+}
+#define PLAY_STATUS(name) PlayStatus(status_##name##_start, status_##name##_end)
+
 // The one LED we control (amber, GPIO21) says what she is doing by pattern; the red one beside
 // it is the charger's. Off while idle, so a lit LED always means something:
 //   fast blink   starting, connecting, updating      slow blink   Wi-Fi setup hotspot
@@ -87,7 +102,10 @@ public:
     XiaoSenseLed() : GpioLed(BUILTIN_LED_GPIO, 1) {}
 
     void OnStateChanged() override {
-        switch (Application::GetInstance().GetDeviceState()) {
+        auto state = Application::GetInstance().GetDeviceState();
+        Chime(last_, state);
+        last_ = state;
+        switch (state) {
             case kDeviceStateStarting:
             case kDeviceStateActivating:
             case kDeviceStateConnecting:
@@ -119,6 +137,27 @@ public:
     void Shutter() {
         SetBrightness(100);
         Blink(2, 70);
+        PLAY_STATUS(shutter);
+    }
+
+private:
+    DeviceState last_ = kDeviceStateUnknown;
+    bool greeted_ = false;
+
+    // A sound for the moments the LED alone would leave unclear: ready after boot, heard her
+    // name, done and back to idle.
+    void Chime(DeviceState from, DeviceState to) {
+        if (from == to) return;
+        if (to == kDeviceStateIdle && !greeted_ &&
+            (from == kDeviceStateActivating || from == kDeviceStateStarting)) {
+            greeted_ = true;
+            PLAY_STATUS(connected);
+        } else if (from == kDeviceStateIdle && (to == kDeviceStateConnecting || to == kDeviceStateListening)) {
+            PLAY_STATUS(wake);
+        } else if (to == kDeviceStateIdle && greeted_ &&
+                   (from == kDeviceStateListening || from == kDeviceStateSpeaking)) {
+            PLAY_STATUS(listening_ends);
+        }
     }
 };
 
