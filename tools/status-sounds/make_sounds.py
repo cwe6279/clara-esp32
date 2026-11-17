@@ -38,8 +38,28 @@ def burble(dur, base=600, rate=28):
     return y * env(len(t), 0.01, 0.08)
 
 def click():
-    n = int(0.03 * SR); y = rng.uniform(-1, 1, n) * np.exp(-np.arange(n) / (0.004 * SR))
-    return np.concatenate([y, np.zeros(int(0.05 * SR)), 0.7 * y])
+    """A camera shutter: a bright 'click' as it opens, a deeper 'clack' as it closes. Each is a
+    noise burst shaped into a band (a crude resonator) plus a short ringing tone for body.
+    Its own random source, so changing it never changes the other sounds; the draw from the
+    shared one keeps the sounds after it (chatter) exactly as they were."""
+    rng.uniform(-1, 1, int(0.03 * SR))
+    own = np.random.default_rng(11)
+
+    def snap(centre, ring_hz, dur, decay):
+        n = int(dur * SR); t = np.arange(n) / SR
+        noise = own.uniform(-1, 1, n)
+        # two-pole resonator around `centre`: makes the noise sound like a struck part
+        r, w = 0.97, 2 * np.pi * centre / SR
+        y = np.zeros(n); y1 = y2 = 0.0
+        for i in range(n):
+            y0 = noise[i] + 2 * r * np.cos(w) * y1 - r * r * y2
+            y[i], y2, y1 = y0, y1, y0
+        y /= max(1e-9, np.abs(y).max())
+        ring = 0.25 * np.sin(2 * np.pi * ring_hz * t)          # a little body, not a tone
+        return (y + ring) * np.exp(-t / decay)
+    # sharp: bright, very fast decay (2-3 ms), a hair of gap between open and close
+    return np.concatenate([snap(5200, 3600, 0.025, 0.0022), np.zeros(int(0.055 * SR)),
+                           0.9 * snap(3400, 2200, 0.03, 0.0032)])
 
 def gap(s): return np.zeros(int(s * SR))
 
@@ -60,7 +80,8 @@ SOUNDS = {
 
 if __name__ == "__main__":
     for name, y in SOUNDS.items():
-        y = 0.5 * y / max(1e-9, np.abs(y).max())          # -6 dBFS peak: loud enough, never clips
+        peak = 0.8 if name == "shutter" else 0.5          # the short shutter needs more level to be heard
+        y = peak * y / max(1e-9, np.abs(y).max())         # -6 dBFS peak (shutter -2): never clips
         with wave.open(f"{name}.wav", "wb") as w:
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
             w.writeframes((y * 32767).astype(np.int16).tobytes())
