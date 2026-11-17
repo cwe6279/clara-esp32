@@ -147,4 +147,4 @@ the same list holds the name and voice commands that start at once, with no LLM 
 
 The host (talker, `--satellite-camera`) takes the photo on those labels and keeps it in
 `captures/`: a description for "take a photo", an exact transcription for "scan this document",
-and "start recording" keeps a voice note (audio and transcript) until "stop recording" or 5 minutes.
+and "start recording" keeps a voice note (audio and transcript) until "stop recording" or 15 minutes.
