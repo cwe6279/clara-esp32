@@ -143,7 +143,8 @@ larger. Convert phrases with esp-sr's `tool/multinet_g2p.py` (needs `g2p_en`):
 A phrase written `phrase=label` reports that label to the host instead of the display name, so
 the same list holds the name and voice commands that start at once, with no LLM first:
 
-    CONFIG_CUSTOM_WAKE_WORD="KLaRc;KLnRc;hd KLaRc;hi KLaRc;TdK c FbTb=take a photo;SKaN jgS DnKYcMcNT=scan this document;SKaN jgS=scan this"
+    CONFIG_CUSTOM_WAKE_WORD="KLaRc;KLnRc;hd KLaRc;hi KLaRc;TdK c FbTb=take a photo;SKaN jgS DnKYcMcNT=scan this document;SKaN jgS=scan this;STnRT RcKeRDgl=start recording"
 
 The host (talker, `--satellite-camera`) takes the photo on those labels and keeps it in
-`captures/`: a description for "take a photo", an exact transcription for "scan this document".
+`captures/`: a description for "take a photo", an exact transcription for "scan this document",
+and "start recording" keeps a voice note (audio and transcript) until "stop recording" or 5 minutes.
