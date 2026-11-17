@@ -167,8 +167,12 @@ public:
     XiaoSenseCamera(const camera_config_t& config, XiaoSenseLed* led) : Esp32Camera(config), led_(led) {}
 
     bool Capture() override {
-        if (led_) led_->Shutter();
-        return Esp32Camera::Capture();
+        // The click and flash come AFTER the frame is in: capture first drops a stale frame and
+        // waits for a fresh exposure (long in dim light), and a click at the start told people
+        // the photo was taken while the shutter was still open, so they moved and it blurred.
+        bool ok = Esp32Camera::Capture();
+        if (ok && led_) led_->Shutter();
+        return ok;
     }
 
     std::expected<std::string, std::string> Explain(const std::string& question) override {
