@@ -22,7 +22,7 @@ class GpioLed : public Led {
     void TurnOff();
     void SetBrightness(uint8_t brightness);
 
- private:
+ protected:   // protected: a board can compose its own patterns from these
     std::mutex mutex_;
     TaskHandle_t blink_task_ = nullptr;
     ledc_channel_config_t ledc_channel_ = {0};

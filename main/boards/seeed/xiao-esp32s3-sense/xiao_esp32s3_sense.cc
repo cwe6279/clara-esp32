@@ -77,10 +77,80 @@ private:
     float x1_ = 0, x2_ = 0, y1_ = 0, y2_ = 0;
 };
 
+// The one LED we control (amber, GPIO21) says what she is doing by pattern; the red one beside
+// it is the charger's. Off while idle, so a lit LED always means something:
+//   fast blink   starting, connecting, updating      slow blink   Wi-Fi setup hotspot
+//   solid        listening                           breathing    speaking
+//   double flash the camera's shutter
+class XiaoSenseLed : public GpioLed {
+public:
+    XiaoSenseLed() : GpioLed(BUILTIN_LED_GPIO, 1) {}
+
+    void OnStateChanged() override {
+        switch (Application::GetInstance().GetDeviceState()) {
+            case kDeviceStateStarting:
+            case kDeviceStateActivating:
+            case kDeviceStateConnecting:
+            case kDeviceStateUpgrading:
+                SetBrightness(100);
+                StartContinuousBlink(120);
+                break;
+            case kDeviceStateWifiConfiguring:
+                SetBrightness(100);
+                StartContinuousBlink(600);
+                break;
+            case kDeviceStateListening:
+            case kDeviceStateAudioTesting:
+                SetBrightness(100);
+                TurnOn();
+                break;
+            case kDeviceStateSpeaking:
+            case kDeviceStateNotifying:
+                SetBrightness(100);
+                StartFadeTask();
+                break;
+            case kDeviceStateIdle:
+            default:
+                TurnOff();
+                break;
+        }
+    }
+
+    void Shutter() {
+        SetBrightness(100);
+        Blink(2, 70);
+    }
+};
+
+// The camera, with the LED's shutter flash when a photo is taken.
+class XiaoSenseCamera : public Esp32Camera {
+public:
+    XiaoSenseCamera(const camera_config_t& config, XiaoSenseLed* led) : Esp32Camera(config), led_(led) {}
+
+    bool Capture() override {
+        if (led_) led_->Shutter();
+        return Esp32Camera::Capture();
+    }
+
+    std::expected<std::string, std::string> Explain(const std::string& question) override {
+        auto result = Esp32Camera::Explain(question);
+        if (led_) led_->OnStateChanged();          // back to the state's own pattern
+        return result;
+    }
+
+private:
+    XiaoSenseLed* led_;
+};
+
 class XiaoEsp32S3Sense : public WifiBoard {
 private:
     Button boot_button_;
     Esp32Camera* camera_ = nullptr;
+
+    static XiaoSenseLed* SenseLed() {
+        static XiaoSenseLed led;
+        return &led;
+    }
 
     void InitializeCamera() {
         camera_config_t config = {};
@@ -110,7 +180,7 @@ private:
         config.fb_count = 1;                       // one buffer: the camera rests between photos
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-        camera_ = new Esp32Camera(config);
+        camera_ = new XiaoSenseCamera(config, SenseLed());
     }
 
     void InitializeButtons() {
@@ -135,8 +205,7 @@ public:
     }
 
     Led* GetLed() override {
-        static GpioLed led(BUILTIN_LED_GPIO, 1);   // lit when the pin is low
-        return &led;
+        return SenseLed();                          // lit when the pin is low
     }
 
     AudioCodec* GetAudioCodec() override {
