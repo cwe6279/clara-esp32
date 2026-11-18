@@ -50,6 +50,8 @@
 #define CAMERA_FRAME_SIZE FRAMESIZE_QXGA     // 2048x1536, the sensor's full size: scans are cut into
                                              // halves on the host so small text keeps its detail
 #define CAMERA_JPEG_QUALITY 12
+#define CAMERA_AE_LEVEL 3                  // auto-exposure target, -5..5 on the OV3660 (0 = its default, 44)
+#define CAMERA_GAIN_CEILING 16             // most sensor gain allowed, 1-64x (the OV3660's own default is about 15x)
 
 #define CAMERA_BEST_OF      3                 // fresh frames per photo; the sharpest (largest JPEG) is kept
 

@@ -8,7 +8,9 @@
 #include "config.h"
 #include "led/gpio_led.h"
 #include "esp32_camera.h"
+#include "mcp_server.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <driver/usb_serial_jtag.h>
@@ -204,10 +206,25 @@ public:
         current_fb_ = best;
         ESP_LOGI(TAG, "photo %ux%u: kept %u bytes of %u / %u / %u", best->width, best->height,
                  (unsigned)best->len, (unsigned)sizes[0], (unsigned)sizes[1], (unsigned)sizes[2]);
+        LogExposure();
         // The click and flash come AFTER the frame is in: a click at the start told people the
         // photo was taken while the shutter was still open, so they moved and it blurred.
         if (led_) led_->Shutter();
         return true;
+    }
+
+    // What the auto-exposure actually did for this photo, read back from the OV3660: its target
+    // window, the average brightness it measured, the exposure (in lines) and the gain (x16).
+    void LogExposure() {
+        sensor_t* s = esp_camera_sensor_get();
+        if (!s) return;
+        auto r = [s](int reg) { return s->get_reg(s, reg, 0xff); };
+        int exposure = ((r(0x3500) & 0x0f) << 12) | (r(0x3501) << 4) | (r(0x3502) >> 4);
+        int gain = ((r(0x350a) & 0x03) << 8) | r(0x350b);
+        int maxlines = (r(0x380e) << 8) | r(0x380f);
+        ESP_LOGI(TAG, "exposure: target %d..%d, measured %d, exposure %d of %d lines, gain %d.%02dx, "
+                 "manual 0x%02x, night 0x%02x, ae_level %d", r(0x3a10), r(0x3a0f), r(0x56a1), exposure, maxlines,
+                 gain / 16, (gain % 16) * 100 / 16, r(0x3503), r(0x3a00), s->status.ae_level);
     }
 
     std::expected<std::string, std::string> Explain(const std::string& question) override {
@@ -265,15 +282,48 @@ private:
             int was = sensor->status.hmirror;
             sensor->set_hmirror(sensor, was ? 0 : 1);
             ESP_LOGI(TAG, "camera: mirror %d -> %d", was, was ? 0 : 1);
-            // Dim rooms: let the sensor raise its gain further and not stretch the exposure
-            // (night mode), so a photo is grainier but not smeared by a moving hand.
-            sensor->set_gainceiling(sensor, GAINCEILING_64X);
-            sensor->set_aec2(sensor, 0);
-            // Indoors the photos came out one to two stops dark (an average near 45 of 255): aim the
-            // auto-exposure one step brighter (-2..2). It uses a longer exposure or more gain as the
-            // light allows, so the resolution is unchanged.
-            sensor->set_ae_level(sensor, 1);
+            // Exposure: the target, the gain ceiling and night mode, set here at start and live from
+            // the host (self.camera.set_exposure). Night mode stays off by default so a moving hand
+            // does not smear.
+            ApplyExposure(sensor, CAMERA_AE_LEVEL, CAMERA_GAIN_CEILING, 0);
         }
+    }
+
+    // The OV3660's gain ceiling is a gain in 1/16 steps (0x3a18-0x3a19, 10 bits). The driver's
+    // set_gainceiling writes the GAINCEILING_* enum number itself, so GAINCEILING_64X (5) capped
+    // the gain at 0.3x: the sensor stayed at its minimum gain and the photos were dark. Write it here.
+    static void ApplyExposure(sensor_t* s, int ae_level, int gain_ceiling, int night) {
+        int g = std::min(std::max(gain_ceiling, 1), 64) * 16 - 1;
+        s->set_reg(s, 0x3a18, 0xff, (g >> 8) & 0x03);
+        s->set_reg(s, 0x3a19, 0xff, g & 0xff);
+        s->set_aec2(s, night ? 1 : 0);
+        int ae = s->set_ae_level(s, std::min(std::max(ae_level, -5), 5));
+        ESP_LOGI(TAG, "camera: ae_level %d (%s), target %d..%d, gain ceiling %dx, night %s", ae_level,
+                 ae == 0 ? "set" : "FAILED", s->get_reg(s, 0x3a10, 0xff), s->get_reg(s, 0x3a0f, 0xff),
+                 gain_ceiling, night ? "on" : "off");
+    }
+
+    void InitializeCameraTools() {
+        if (camera_ == nullptr) return;
+        auto& mcp = McpServer::GetInstance();
+        mcp.AddTool("self.camera.set_exposure",
+            "Tune the camera's exposure: ae_level is the brightness target (-5 dark to 5 bright, 0 the "
+            "sensor default), gain_ceiling the most gain allowed (1-64x; more is brighter in dim light "
+            "but grainier), night 1 allows long exposures (brighter, but movement smears).",
+            PropertyList({Property("ae_level", kPropertyTypeInteger, CAMERA_AE_LEVEL, -5, 5),
+                          Property("gain_ceiling", kPropertyTypeInteger, CAMERA_GAIN_CEILING, 1, 64),
+                          Property("night", kPropertyTypeInteger, 0, 0, 1)}),
+            [](const PropertyList& properties) -> ToolResult {
+                sensor_t* s = esp_camera_sensor_get();
+                if (!s) return std::string("{\"error\": \"no camera\"}");
+                int ae = properties["ae_level"].value<int>(), gain = properties["gain_ceiling"].value<int>();
+                int night = properties["night"].value<int>();
+                ApplyExposure(s, ae, gain, night);
+                char out[160];
+                snprintf(out, sizeof(out), "{\"ae_level\": %d, \"gain_ceiling\": %d, \"night\": %d, "
+                         "\"target\": [%d, %d]}", ae, gain, night, s->get_reg(s, 0x3a10, 0xff), s->get_reg(s, 0x3a0f, 0xff));
+                return std::string(out);
+            });
     }
 
     void InitializeButtons() {
@@ -291,6 +341,7 @@ public:
     XiaoEsp32S3Sense() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeButtons();
         InitializeCamera();
+        InitializeCameraTools();
     }
 
     Camera* GetCamera() override {
