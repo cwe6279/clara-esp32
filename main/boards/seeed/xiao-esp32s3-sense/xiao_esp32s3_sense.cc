@@ -269,6 +269,10 @@ private:
             // (night mode), so a photo is grainier but not smeared by a moving hand.
             sensor->set_gainceiling(sensor, GAINCEILING_64X);
             sensor->set_aec2(sensor, 0);
+            // Indoors the photos came out one to two stops dark (an average near 45 of 255): aim the
+            // auto-exposure one step brighter (-2..2). It uses a longer exposure or more gain as the
+            // light allows, so the resolution is unchanged.
+            sensor->set_ae_level(sensor, 1);
         }
     }
 
