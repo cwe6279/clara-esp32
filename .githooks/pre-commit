@@ -1,0 +1,6 @@
+#!/bin/sh
+# No photos, scans, recordings or session logs in git (tools/no_captures.py).
+# Enable once per clone: git config core.hooksPath .githooks
+S="$(git rev-parse --show-toplevel)/tools/no_captures.py"
+[ -f "$S" ] || S="$(dirname "$0")/../tools/no_captures.py"     # a repo borrowing these hooks
+exec python3 "$S"

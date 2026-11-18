@@ -18,3 +18,14 @@ main/mmap_generate_emoji.h
 *.bin
 mmap_generate_*.h
 .clangd
+
+# Captures never go in git: photos, scans, recordings, logs (tools/no_captures.py also refuses them)
+captures/
+snapshots/
+recordings/
+emergencies/
+last-look.jpg
+tools/board-probes/**/*.wav
+tools/board-probes/**/*.jpg
+tools/board-probes/**/*.jpeg
+tools/board-probes/**/*.mjpeg

@@ -1,0 +1,8 @@
+# Images and sounds that belong in this repo (tools/no_captures.py): upstream docs and board
+# pictures, the firmware's own sound and image assets. Photos and recordings never do.
+docs/*
+main/assets/*
+main/boards/*
+scripts/*
+partitions/*
+tools/status-sounds/*
